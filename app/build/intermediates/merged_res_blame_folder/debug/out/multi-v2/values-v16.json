@@ -1,0 +1,38 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.example.calltranslatorapp-mergeDebugResources-30:/values-v16/values-v16.xml",
+            "map": [
+                {
+                    "source": "/data/data/com.termux/files/home/.gradle/caches/transforms-3/5ef1e4cb41f20fa9d340dacd57dd702d/transformed/core-1.12.0/res/values-v16/values-v16.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "65",
+                        "endOffsets": "116"
+                    }
+                },
+                {
+                    "source": "/data/data/com.termux/files/home/.gradle/caches/transforms-3/8fc4deade2c4ae65addd0b29821fc67b/transformed/appcompat-1.6.1/res/values-v16/values-v16.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "5",
+                        "endColumns": "12",
+                        "endOffsets": "223"
+                    },
+                    "to": {
+                        "startLines": "3",
+                        "startColumns": "4",
+                        "startOffsets": "121",
+                        "endLines": "6",
+                        "endColumns": "12",
+                        "endOffsets": "289"
+                    }
+                }
+            ]
+        }
+    ]
+}
