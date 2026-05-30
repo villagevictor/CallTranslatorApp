@@ -19,7 +19,6 @@ class MainActivity : Activity() {
     private lateinit var textView: TextView
     private val SPEECH_REQUEST_CODE = 100
 
-    // የእንግሊዘኛ ወደ አማርኛ መተርገሚያ ማዋቀሪያ
     private val options = TranslatorOptions.Builder()
         .setSourceLanguage(TranslateLanguage.ENGLISH)
         .setTargetLanguage(TranslateLanguage.AMHARIC)
@@ -56,7 +55,6 @@ class MainActivity : Activity() {
         layout.addView(button)
         setContentView(layout)
 
-        // የመተርገሚያ ሞዴሉን ከበስተጀርባ ማውረድ (አንድ ጊዜ ብቻ)
         textView.text = "የትርጉም ማሽን በመዘጋጀት ላይ..."
         val conditions = DownloadConditions.Builder().requireWifi().build()
         englishAmharicTranslator.downloadModelIfNeeded(conditions)
@@ -69,9 +67,9 @@ class MainActivity : Activity() {
     }
 
     private fun startSpeechToText() {
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SHEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US") // እንግሊዘኛ እንዲያዳምጥ እናስገድደዋለን
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
             putExtra(RecognizerIntent.EXTRA_PROMPT, "እባክዎ በእንግሊዘኛ ይናገሩ...")
         }
 
@@ -92,10 +90,8 @@ class MainActivity : Activity() {
             if (spokenText.isNotEmpty()) {
                 textView.text = "የተሰማው (EN)፦ $spokenText\n\nእየተተረጎመ ነው..."
                 
-                // ወደ አማርኛ የመተርጎም ስራ
                 englishAmharicTranslator.translate(spokenText)
                     .addOnSuccessListener { translatedText ->
-                        // የተተረጎመውን አማርኛ ስክሪኑ ላይ ያሳያል
                         textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $translatedText"
                     }
                     .addOnFailureListener {
