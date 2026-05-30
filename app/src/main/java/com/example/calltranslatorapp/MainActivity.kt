@@ -13,7 +13,7 @@ class MainActivity : AppCompatActivity() {
         val layout = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             gravity = android.view.Gravity.CENTER
-            padding = 50
+            setPadding(50, 50, 50, 50)
         }
 
         val textView = TextView(this).apply {
