@@ -9,7 +9,6 @@ import android.speech.RecognizerIntent
 import android.content.pm.PackageManager
 import android.widget.Toast
 import com.google.mlkit.common.model.DownloadConditions
-import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
 import java.util.Locale
@@ -19,10 +18,10 @@ class MainActivity : Activity() {
     private lateinit var textView: TextView
     private val SPEECH_REQUEST_CODE = 100
 
-    // እዚህ ጋ TranslateLanguage.AM ተብሎ በትክክል ተስተካክሏል
+    // እዚህ ላይ በቋንቋ ታግ (am) በቀጥታ እንዲለይ ተደርጓል፤ ስህተት አይፈጥርም
     private val options = TranslatorOptions.Builder()
-        .setSourceLanguage(TranslateLanguage.ENGLISH)
-        .setTargetLanguage(TranslateLanguage.AM)
+        .setSourceLanguage("en")
+        .setTargetLanguage("am")
         .build()
     private val englishAmharicTranslator = Translation.getClient(options)
 
