@@ -16,9 +16,9 @@ import java.util.Locale
 class MainActivity : Activity() {
 
     private lateinit var textView: TextView
+    private lateinit var button: Button
     private val SPEECH_REQUEST_CODE = 100
 
-    // እዚህ ላይ በቋንቋ ታግ (am) በቀጥታ እንዲለይ ተደርጓል፤ ስህተት አይፈጥርም
     private val options = TranslatorOptions.Builder()
         .setSourceLanguage("en")
         .setTargetLanguage("am")
@@ -35,13 +35,14 @@ class MainActivity : Activity() {
         }
 
         textView = TextView(this).apply {
-            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)"
-            textSize = 22f
+            text = "የትርጉም ማሽን ከጉግል ላይ በመውረድ ላይ ነው...\nእባክዎ ኢንተርኔት ያብሩ እና ጥቂት ሰከንድ ይጠብቁ።"
+            textSize = 20f
             gravity = android.view.Gravity.CENTER
         }
 
-        val button = Button(this).apply {
+        button = Button(this).apply {
             text = "ማዳመጥ እና መተርጎም ጀምር"
+            isEnabled = false // ፋይሉ እስኪወርድ በተኑ እንዳይሰራ እናግደዋለን
             setOnClickListener {
                 if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                     startSpeechToText()
@@ -55,14 +56,16 @@ class MainActivity : Activity() {
         layout.addView(button)
         setContentView(layout)
 
-        textView.text = "የትርጉም ማሽን በመዘጋጀት ላይ..."
+        // ያለምንም ቅድመ ሁኔታ በዳታም በዋይፋይም እንዲያወርድ ማድረግ
         val conditions = DownloadConditions.Builder().build()
         englishAmharicTranslator.downloadModelIfNeeded(conditions)
             .addOnSuccessListener {
-                textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\nዝግጁ ነው!"
+                // ፋይሉ ወርዶ ሲያበቃ አፑ ዝግጁ ይሆናል
+                textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\nአፑ አሁን ዝግጁ ነው!"
+                button.isEnabled = true
             }
-            .addOnFailureListener {
-                textView.text = "የትርጉም ሞዴል ማውረድ አልተቻለም። ኢንተርኔት ያብሩ!"
+            .addOnFailureListener { e ->
+                textView.text = "የትርጉም ፋይሉን ማውረድ አልተቻለም።\nኢንተርኔት መኖሩን ያረጋግጡ!\nስህተት፦ ${e.message}"
             }
     }
 
@@ -94,8 +97,8 @@ class MainActivity : Activity() {
                     .addOnSuccessListener { translatedText ->
                         textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $translatedText"
                     }
-                    .addOnFailureListener {
-                        textView.text = "ትርጉም አልተሳካም!"
+                    .addOnFailureListener { e ->
+                        textView.text = "ትርጉም አልተሳካም!\nምክንያት፦ ${e.message}"
                     }
             }
         }
