@@ -6,9 +6,12 @@ import android.widget.TextView
 import android.app.Activity
 import android.content.Intent
 import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.content.pm.PackageManager
 import android.widget.Toast
+import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.TranslatorOptions
 import java.util.Locale
 
 class MainActivity : Activity() {
@@ -16,10 +19,16 @@ class MainActivity : Activity() {
     private lateinit var textView: TextView
     private val SPEECH_REQUEST_CODE = 100
 
+    // የእንግሊዘኛ ወደ አማርኛ መተርገሚያ ማዋቀሪያ
+    private val options = TranslatorOptions.Builder()
+        .setSourceLanguage(TranslateLanguage.ENGLISH)
+        .setTargetLanguage(TranslateLanguage.AMHARIC)
+        .build()
+    private val englishAmharicTranslator = Translation.getClient(options)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // ገጽታውን በኮድ መፍጠር
         val layout = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             gravity = android.view.Gravity.CENTER
@@ -27,19 +36,17 @@ class MainActivity : Activity() {
         }
 
         textView = TextView(this).apply {
-            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(Google Speech to Text)"
+            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)"
             textSize = 22f
             gravity = android.view.Gravity.CENTER
         }
 
         val button = Button(this).apply {
-            text = "ማዳመጥ ጀምር"
+            text = "ማዳመጥ እና መተርጎም ጀምር"
             setOnClickListener {
-                // መጀመሪያ የማይክሮፎን ፈቃድ መኖሩን ማረጋገጥ
                 if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                     startSpeechToText()
                 } else {
-                    // ፈቃድ ከሌለ ተጠቃሚውን መጠየቅ
                     requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 1)
                 }
             }
@@ -48,34 +55,53 @@ class MainActivity : Activity() {
         layout.addView(textView)
         layout.addView(button)
         setContentView(layout)
+
+        // የመተርገሚያ ሞዴሉን ከበስተጀርባ ማውረድ (አንድ ጊዜ ብቻ)
+        textView.text = "የትርጉም ማሽን በመዘጋጀት ላይ..."
+        val conditions = DownloadConditions.Builder().requireWifi().build()
+        englishAmharicTranslator.downloadModelIfNeeded(conditions)
+            .addOnSuccessListener {
+                textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\nዝግጁ ነው!"
+            }
+            .addOnFailureListener {
+                textView.text = "የትርጉም ሞዴል ማውረድ አልተቻለም። ኢንተርኔት ያብሩ!"
+            }
     }
 
-    // የGoogle Speech to Text ማዳመጫ መስኮት መክፈቻ
     private fun startSpeechToText() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault()) // የስልክህን ቋንቋ ይወስዳል
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "እየሰማሁ ነው... ይናገሩ")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US") // እንግሊዘኛ እንዲያዳምጥ እናስገድደዋለን
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "እባክዎ በእንግሊዘኛ ይናገሩ...")
         }
 
         try {
             startActivityForResult(intent, SPEECH_REQUEST_CODE)
-            textView.text = "ድምጽ በማዳመጥ ላይ..."
         } catch (e: Exception) {
-            Toast.makeText(this, "የGoogle ድምጽ መለዮ ስልክዎ ላይ አልተጫነም", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "ስህተት አጋጥሟል", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // ድምጹ ተሰምቶ ሲያበቃ ውጤቱን የምንቀበልበት ክፍል
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
         if (requestCode == SPEECH_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
             val results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            val spokenText = results?.get(0) ?: "ድምጽ መለየት አልተቻለም"
-            
-            // የተናገርከውን ድምጽ ወደ ጽሑፍ ቀይሮ ስክሪኑ ላይ ያሳየዋል
-            textView.text = "የተሰማው ጽሑፍ፦\n$spokenText"
+            val spokenText = results?.get(0) ?: ""
+
+            if (spokenText.isNotEmpty()) {
+                textView.text = "የተሰማው (EN)፦ $spokenText\n\nእየተተረጎመ ነው..."
+                
+                // ወደ አማርኛ የመተርጎም ስራ
+                englishAmharicTranslator.translate(spokenText)
+                    .addOnSuccessListener { translatedText ->
+                        // የተተረጎመውን አማርኛ ስክሪኑ ላይ ያሳያል
+                        textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $translatedText"
+                    }
+                    .addOnFailureListener {
+                        textView.text = "ትርጉም አልተሳካም!"
+                    }
+            }
         }
     }
 }

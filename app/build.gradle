@@ -1,0 +1,30 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.example.calltranslatorapp'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.example.calltranslatorapp"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
+    // የጉግል ኦንላይን/ኦፍላይን መተርገሚያ ላይብረሪ
+    implementation 'com.google.mlkit:translate:17.0.1'
+}
