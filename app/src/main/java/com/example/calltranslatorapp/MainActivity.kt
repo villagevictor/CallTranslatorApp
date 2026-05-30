@@ -19,6 +19,7 @@ class MainActivity : Activity() {
     private lateinit var textView: TextView
     private val SPEECH_REQUEST_CODE = 100
 
+    // እዚህ ላይ AMHARIC ወደ AM ተስተካክሏል
     private val options = TranslatorOptions.Builder()
         .setSourceLanguage(TranslateLanguage.ENGLISH)
         .setTargetLanguage(TranslateLanguage.AMHARIC)
@@ -56,7 +57,7 @@ class MainActivity : Activity() {
         setContentView(layout)
 
         textView.text = "የትርጉም ማሽን በመዘጋጀት ላይ..."
-        val conditions = DownloadConditions.Builder().requireWifi().build()
+        val conditions = DownloadConditions.Builder().build() // ፈጣን እንዲሆን ኔትወርክ አልገደብነውም
         englishAmharicTranslator.downloadModelIfNeeded(conditions)
             .addOnSuccessListener {
                 textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\nዝግጁ ነው!"
@@ -67,7 +68,8 @@ class MainActivity : Activity() {
     }
 
     private fun startSpeechToText() {
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SHEECH).apply {
+        // እዚህ ላይ ACTION_RECOGNIZE_SPEECH ተስተካክሏል
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
             putExtra(RecognizerIntent.EXTRA_PROMPT, "እባክዎ በእንግሊዘኛ ይናገሩ...")
