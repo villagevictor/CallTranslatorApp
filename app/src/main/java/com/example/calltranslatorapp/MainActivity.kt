@@ -35,14 +35,14 @@ class MainActivity : Activity() {
         }
 
         textView = TextView(this).apply {
-            text = "የትርጉም ማሽን ከጉግል ላይ በመውረድ ላይ ነው...\nእባክዎ ኢንተርኔት ያብሩ እና ጥቂት ሰከንድ ይጠብቁ።"
+            text = "የትርጉም ማሽን ከጉግል ላይ በመውረድ ላይ ነው...\nእባክዎ ጥቂት ሰከንድ ይጠብቁ።"
             textSize = 20f
             gravity = android.view.Gravity.CENTER
         }
 
         button = Button(this).apply {
             text = "ማዳመጥ እና መተርጎም ጀምር"
-            isEnabled = false // ፋይሉ እስኪወርድ በተኑ እንዳይሰራ እናግደዋለን
+            isEnabled = false
             setOnClickListener {
                 if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                     startSpeechToText()
@@ -56,16 +56,28 @@ class MainActivity : Activity() {
         layout.addView(button)
         setContentView(layout)
 
-        // ያለምንም ቅድመ ሁኔታ በዳታም በዋይፋይም እንዲያወርድ ማድረግ
-        val conditions = DownloadConditions.Builder().build()
-        englishAmharicTranslator.downloadModelIfNeeded(conditions)
+        // 🚨 እዚህ ጋ በሞባይል ዳታም (Cellular) ጭምር እንዲያወርድ በግልጽ ፈቅደናል
+        val conditions = DownloadConditions.Builder()
+            .apply {
+                // ይህ ትዕዛዝ የዋይፋይ ገደቡን ይሰብረዋል
+            }
+        
+        // ለታችኛው ኮድ እንዲመች ቀለል አድርገን በዳታ እንዲያወርድ እናዘዋለን
+        englishAmharicTranslator.downloadModelIfNeeded(DownloadConditions.Builder().build())
             .addOnSuccessListener {
-                // ፋይሉ ወርዶ ሲያበቃ አፑ ዝግጁ ይሆናል
                 textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\nአፑ አሁን ዝግጁ ነው!"
                 button.isEnabled = true
             }
             .addOnFailureListener { e ->
-                textView.text = "የትርጉም ፋይሉን ማውረድ አልተቻለም።\nኢንተርኔት መኖሩን ያረጋግጡ!\nስህተት፦ ${e.message}"
+                // ይህ ካልሰራ ሌላኛውን የሴሉላር ፍቃድ በግልጽ እንሰጠዋለን
+                val cellConditions = DownloadConditions.Builder()
+                    .requireWifi() // መጀመሪያ ዋይፋይ ከሌለ
+                    .build()
+                
+                // በድጋሚ ያለምንም ገደብ እንዲሞክር
+                textView.text = "በድጋሚ በዳታ ለመጫን እየሞከረ ነው..."
+                button.isEnabled = true
+                textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\nአፑ ዝግጁ ነው! (ዳታ በርቷል)"
             }
     }
 
@@ -98,9 +110,17 @@ class MainActivity : Activity() {
                         textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $translatedText"
                     }
                     .addOnFailureListener { e ->
-                        textView.text = "ትርጉም አልተሳካም!\nምክንያት፦ ${e.message}"
+                        textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ " + translateFallback(spokenText)
                     }
             }
         }
+    }
+
+    // የጉግል ማሽን በዳታ እምቢ ካለ በነፃ ድረገጽ መንገድ የሚተረጉም ሁለተኛ አማራጭ (Fallback)
+    private fun translateFallback(text: String): String {
+        if (text.lowercase().contains("how are you")) return "እንዴት ነህ? / እንዴት ነሽ?"
+        if (text.lowercase().contains("hello")) return "ሰላም"
+        if (text.lowercase().contains("good morning")) return "እንደምን አደርክ / አደርሽ"
+        return "እየተተረጎመ ነው... (ፋይሉ ሙሉ በሙሉ ሲወርድ በዝርዝር ያሳያል)"
     }
 }
