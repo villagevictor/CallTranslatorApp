@@ -2,7 +2,9 @@ package com.example.calltranslatorapp
 
 import android.os.Bundle
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.TextView
+import android.view.Gravity
 import android.app.Activity
 import android.content.Intent
 import android.speech.RecognizerIntent
@@ -11,7 +13,6 @@ import android.widget.Toast
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
-import java.util.Locale
 
 class MainActivity : Activity() {
 
@@ -29,16 +30,16 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val layout = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            gravity = android.view.Gravity.CENTER
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
             setPadding(50, 50, 50, 50)
         }
 
         textView = TextView(this).apply {
             text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)"
             textSize = 22f
-            gravity = android.view.Gravity.CENTER
+            gravity = Gravity.CENTER
         }
 
         button = Button(this).apply {
@@ -47,7 +48,7 @@ class MainActivity : Activity() {
                 if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                     startSpeechToText()
                 } else {
-                    requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.READ_PHONE_STATE), 1)
+                    requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 1)
                 }
             }
         }
@@ -55,9 +56,13 @@ class MainActivity : Activity() {
         bgButton = Button(this).apply {
             text = "በጥሪ ጊዜ ከበስተጀርባ አስጀምር"
             setOnClickListener {
-                val intent = Intent(this@MainActivity, CallTranslationService::class.java)
-                startForegroundService(intent)
-                Toast.makeText(this@MainActivity, "የጥሪ መከታተያ ከበስተጀርባ ተነስቷል!", Toast.LENGTH_SHORT).show()
+                try {
+                    val intent = Intent(this@MainActivity, CallTranslationService::class.java)
+                    startForegroundService(intent)
+                    Toast.makeText(this@MainActivity, "የጥሪ መከታተያ በተሳካ ሁኔታ ተነስቷል!", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, "ማስነሳት አልተቻለም፦ ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
         }
 
