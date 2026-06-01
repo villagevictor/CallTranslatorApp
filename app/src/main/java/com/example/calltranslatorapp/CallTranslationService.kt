@@ -7,29 +7,26 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import androidx.core.app.NotificationCompat
 
 class CallTranslationService : Service() {
 
-    private var speechRecognizer: SpeechRecognizer? = null
     private val CHANNEL_ID = "call_translator_channel"
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         
-        // በአንድሮይድ ህግ መሰረት ሰርቪሱን ደህንነቱ የተጠበቀ ማድረግ
+        // ሳምሰንግ One UI ላይ በግልጽ የሚታይ አዶ መርጠናል።
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("የጥሪ መተርገሚያ")
             .setContentText("ከበስተጀርባ ጥሪዎችን በመከታተል ላይ...")
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSmallIcon(android.R.drawable.stat_sys_phone_call) // የጥሪ ምልክት አዶ
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setOngoing(true)
             .build()
 
         startForeground(101, notification)
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -40,16 +37,13 @@ class CallTranslationService : Service() {
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Call Translation Service",
-            NotificationManager.IMPORTANCE_LOW
-        )
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "የጥሪ መተርገሚያ የበስተጀርባ ማሳወቂያ ቻናል"
+        }
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    override fun onDestroy() {
-        speechRecognizer?.destroy()
-        super.onDestroy()
-    }
 }

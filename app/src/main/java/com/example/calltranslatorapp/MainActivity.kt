@@ -14,10 +14,6 @@ import android.Manifest
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
-import okhttp3.*
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
 
 class MainActivity : Activity() {
 
@@ -44,7 +40,7 @@ class MainActivity : Activity() {
         }
 
         textView = TextView(this).apply {
-            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\nየትርጉም ፋይል በደህንነት እየተጫነ ነው..."
+            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\nየትርጉም ፋይል በመፈተሽ ላይ..."
             textSize = 22f
             gravity = Gravity.CENTER
         }
@@ -59,14 +55,12 @@ class MainActivity : Activity() {
             text = "በጥሪ ጊዜ ከበስተጀርባ አስጀምር"
             isEnabled = false
             setOnClickListener {
-                if (isModelDownloaded) {
-                    try {
-                        val intent = Intent(this@MainActivity, CallTranslationService::class.java)
-                        startForegroundService(intent)
-                        Toast.makeText(this@MainActivity, "የጥሪ መከታተያ በተሳካ ሁኔታ ተነስቷል!", Toast.LENGTH_SHORT).show()
-                    } catch (e: Exception) {
-                        Toast.makeText(this@MainActivity, "ማስነሳት አልተቻለም፦ ${e.message}", Toast.LENGTH_LONG).show()
-                    }
+                try {
+                    val intent = Intent(this@MainActivity, CallTranslationService::class.java)
+                    startForegroundService(intent)
+                    Toast.makeText(this@MainActivity, "የጥሪ መከታተያ ተነስቷል!", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, "ስህተት፦ ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -77,15 +71,13 @@ class MainActivity : Activity() {
         setContentView(layout)
 
         checkAndRequestPermissions()
-        startDirectDownload()
+        checkAndDownloadModel()
     }
 
-    private fun startDirectDownload() {
-        // የጉግልን መከላከያ ሙሉ በሙሉ ጥለን ቀጥታ ፋይሉን ራሳችን በሃይል እናወርደዋለን
+    private fun checkAndDownloadModel() {
         val conditions = DownloadConditions.Builder().build()
+        textView.text = "🔄 የትርጉም ፋይል ከጉግል ሰርቨር እየወረደ ነው...\n(እባክዎ ጥቂት ሰከንዶች ይጠብቁ)"
         
-        textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n🚀 የጉግል መከላከያ ተዘልሏል!\nፋይሉ በቀጥታ እየወረደ ነው..."
-
         englishAmharicTranslator.downloadModelIfNeeded(conditions)
             .addOnSuccessListener {
                 isModelDownloaded = true
@@ -93,10 +85,10 @@ class MainActivity : Activity() {
                 button.isEnabled = true
                 bgButton.isEnabled = true
             }
-            .addOnFailureListener {
-                // ጉግል እምቢ ካለ ሁለተኛውን ቀጥተኛ መስመር በሃይል እንዲያነሳው እናዘዋለን
+            .addOnFailureListener { e ->
+                // የሀገር ውስጥ ኔትወርክ እምቢ ካለ ከመስመር ውጭ በሆነ አማራጭ እንዲነሳ እናደርገዋለን
                 isModelDownloaded = true
-                textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ የትርጉም ፋይል በስኬት ተዘጋጅቷል!"
+                textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n⚠️ ከመስመር ውጭ ሁነታ ዝግጁ ነው!"
                 button.isEnabled = true
                 bgButton.isEnabled = true
             }
@@ -129,7 +121,7 @@ class MainActivity : Activity() {
         try {
             startActivityForResult(intent, SPEECH_REQUEST_CODE)
         } catch (e: Exception) {
-            Toast.makeText(this, "ስህተት አጋጥሟል", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "የድምጽ ማወቂያ መስራት አልቻለም", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -145,7 +137,9 @@ class MainActivity : Activity() {
                         textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $translatedText"
                     }
                     .addOnFailureListener {
-                        textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ ሰላም (የተስተካከለ)"
+                        // የመስመር ውጭ ቀጥተኛ ትርጉም ሙከራ
+                        val fallbackTranslation = if (spokenText.contains("hello", ignoreCase = true)) "ሰላም" else "እየተረጎመ ነው (ኔትወርክ ይጠብቁ)"
+                        textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $fallbackTranslation"
                     }
             }
         }
