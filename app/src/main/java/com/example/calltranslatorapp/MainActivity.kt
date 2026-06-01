@@ -10,6 +10,7 @@ import android.content.Intent
 import android.speech.RecognizerIntent
 import android.content.pm.PackageManager
 import android.widget.Toast
+import android.Manifest
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
@@ -20,6 +21,7 @@ class MainActivity : Activity() {
     private lateinit var button: Button
     private lateinit var bgButton: Button
     private val SPEECH_REQUEST_CODE = 100
+    private val PERMISSION_REQUEST_CODE = 200
 
     private val options = TranslatorOptions.Builder()
         .setSourceLanguage("en")
@@ -45,11 +47,7 @@ class MainActivity : Activity() {
         button = Button(this).apply {
             text = "ማዳመጥ እና መተርጎም ጀምር"
             setOnClickListener {
-                if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                    startSpeechToText()
-                } else {
-                    requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 1)
-                }
+                startSpeechToText()
             }
         }
 
@@ -71,8 +69,32 @@ class MainActivity : Activity() {
         layout.addView(bgButton)
         setContentView(layout)
 
+        // አፑ ሲከፈት ሁሉንም አስፈላጊ ፈቃዶች በአንድ ላይ ይጠይቃል (ማሳወቂያን ጨምሮ)
+        checkAndRequestPermissions()
+
         val conditions = DownloadConditions.Builder().build()
         englishAmharicTranslator.downloadModelIfNeeded(conditions)
+    }
+
+    private fun checkAndRequestPermissions() {
+        val permissionsNeeded = mutableListOf<String>()
+        
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.RECORD_AUDIO)
+        }
+        if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.READ_PHONE_STATE)
+        }
+        // በአንድሮይድ 13+ ላይ የማሳወቂያ ፈቃድ መጠየቅ
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add("android.permission.POST_NOTIFICATIONS")
+            }
+        }
+
+        if (permissionsNeeded.isNotEmpty()) {
+            requestPermissions(permissionsNeeded.toTypedArray(), PERMISSION_REQUEST_CODE)
+        }
     }
 
     private fun startSpeechToText() {
