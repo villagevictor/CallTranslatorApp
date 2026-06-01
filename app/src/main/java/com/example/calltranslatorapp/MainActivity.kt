@@ -22,6 +22,7 @@ class MainActivity : Activity() {
     private lateinit var bgButton: Button
     private val SPEECH_REQUEST_CODE = 100
     private val PERMISSION_REQUEST_CODE = 200
+    private var isModelDownloaded = false
 
     private val options = TranslatorOptions.Builder()
         .setSourceLanguage("en")
@@ -39,13 +40,14 @@ class MainActivity : Activity() {
         }
 
         textView = TextView(this).apply {
-            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)"
+            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\nየትርጉም ፋይል በመጫን ላይ..."
             textSize = 22f
             gravity = Gravity.CENTER
         }
 
         button = Button(this).apply {
             text = "ማዳመጥ እና መተርጎም ጀምር"
+            isEnabled = false // ፋይሉ እስኪወርድ ይቆለፋል
             setOnClickListener {
                 startSpeechToText()
             }
@@ -53,13 +55,18 @@ class MainActivity : Activity() {
 
         bgButton = Button(this).apply {
             text = "በጥሪ ጊዜ ከበስተጀርባ አስጀምር"
+            isEnabled = false // ፋይሉ እስኪወርድ ይቆለፋል
             setOnClickListener {
-                try {
-                    val intent = Intent(this@MainActivity, CallTranslationService::class.java)
-                    startForegroundService(intent)
-                    Toast.makeText(this@MainActivity, "የጥሪ መከታተያ በተሳካ ሁኔታ ተነስቷል!", Toast.LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    Toast.makeText(this@MainActivity, "ማስነሳት አልተቻለም፦ ${e.message}", Toast.LENGTH_LONG).show()
+                if (isModelDownloaded) {
+                    try {
+                        val intent = Intent(this@MainActivity, CallTranslationService::class.java)
+                        startForegroundService(intent)
+                        Toast.makeText(this@MainActivity, "የጥሪ መከታተያ በተሳካ ሁኔታ ተነስቷል!", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(this@MainActivity, "ማስነሳት አልተቻለም፦ ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                } else {
+                    Toast.makeText(this@MainActivity, "እባክዎ የትርጉም ፋይሉ እስኪወርድ ይጠብቁ!", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -69,29 +76,38 @@ class MainActivity : Activity() {
         layout.addView(bgButton)
         setContentView(layout)
 
-        // አፑ ሲከፈት ሁሉንም አስፈላጊ ፈቃዶች በአንድ ላይ ይጠይቃል (ማሳወቂያን ጨምሮ)
         checkAndRequestPermissions()
+        downloadTranslationModel()
+    }
 
+    private fun downloadTranslationModel() {
         val conditions = DownloadConditions.Builder().build()
         englishAmharicTranslator.downloadModelIfNeeded(conditions)
+            .addOnSuccessListener {
+                isModelDownloaded = true
+                textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ የትርጉም ፋይል ዝግጁ ነው!"
+                button.isEnabled = true
+                bgButton.isEnabled = true
+            }
+            .addOnFailureListener { e ->
+                isModelDownloaded = false
+                textView.text = "❌ የትርጉም ፋይሉን ማውረድ አልተቻለም።\nእባክዎ ኢንተርኔት አብርተው አፑን በድጋሚ ይክፈቱ!\nስህተት፦ ${e.message}"
+            }
     }
 
     private fun checkAndRequestPermissions() {
         val permissionsNeeded = mutableListOf<String>()
-        
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             permissionsNeeded.add(Manifest.permission.RECORD_AUDIO)
         }
         if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
             permissionsNeeded.add(Manifest.permission.READ_PHONE_STATE)
         }
-        // በአንድሮይድ 13+ ላይ የማሳወቂያ ፈቃድ መጠየቅ
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
                 permissionsNeeded.add("android.permission.POST_NOTIFICATIONS")
             }
         }
-
         if (permissionsNeeded.isNotEmpty()) {
             requestPermissions(permissionsNeeded.toTypedArray(), PERMISSION_REQUEST_CODE)
         }
@@ -112,12 +128,10 @@ class MainActivity : Activity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-
         if (requestCode == SPEECH_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
             val results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
             val spokenText = results?.get(0) ?: ""
-
-            if (spokenText.isNotEmpty()) {
+            if (spokenText.isNotEmpty() && isModelDownloaded) {
                 textView.text = "የተሰማው (EN)፦ $spokenText\n\nእየተተረጎመ ነው..."
                 englishAmharicTranslator.translate(spokenText)
                     .addOnSuccessListener { translatedText ->
