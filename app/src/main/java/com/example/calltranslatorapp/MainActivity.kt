@@ -47,7 +47,7 @@ class MainActivity : Activity() {
 
         button = Button(this).apply {
             text = "ማዳመጥ እና መተርጎም ጀምር"
-            isEnabled = false // ፋይሉ እስኪወርድ ይቆለፋል
+            isEnabled = false
             setOnClickListener {
                 startSpeechToText()
             }
@@ -55,7 +55,7 @@ class MainActivity : Activity() {
 
         bgButton = Button(this).apply {
             text = "በጥሪ ጊዜ ከበስተጀርባ አስጀምር"
-            isEnabled = false // ፋይሉ እስኪወርድ ይቆለፋል
+            isEnabled = false
             setOnClickListener {
                 if (isModelDownloaded) {
                     try {
@@ -81,7 +81,12 @@ class MainActivity : Activity() {
     }
 
     private fun downloadTranslationModel() {
-        val conditions = DownloadConditions.Builder().build()
+        // እዚህ ጋር የነበረውን ገደብ በማንሳት በማንኛውም ኔትወርክ (Cellular & VPN) እንዲያወርድ አደረግነው
+        val conditions = DownloadConditions.Builder()
+            .build() 
+
+        textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\nፋይሉን ከጉግል ሰርቨር ላይ በመያዝ ላይ..."
+
         englishAmharicTranslator.downloadModelIfNeeded(conditions)
             .addOnSuccessListener {
                 isModelDownloaded = true
@@ -91,7 +96,7 @@ class MainActivity : Activity() {
             }
             .addOnFailureListener { e ->
                 isModelDownloaded = false
-                textView.text = "❌ የትርጉም ፋይሉን ማውረድ አልተቻለም።\nእባክዎ ኢንተርኔት አብርተው አፑን በድጋሚ ይክፈቱ!\nስህተት፦ ${e.message}"
+                textView.text = "❌ የትርጉም ፋይሉን ማውረድ አልተቻለም።\nእባክዎ VPN አብርተው አፑን በድጋሚ ይክፈቱ!\nስህተት፦ ${e.message}"
             }
     }
 
