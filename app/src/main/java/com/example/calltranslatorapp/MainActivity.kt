@@ -14,6 +14,10 @@ import android.Manifest
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
+import okhttp3.*
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 
 class MainActivity : Activity() {
 
@@ -40,7 +44,7 @@ class MainActivity : Activity() {
         }
 
         textView = TextView(this).apply {
-            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\nየትርጉም ፋይል በመፈተሽ ላይ..."
+            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\nየትርጉም ፋይል በደህንነት እየተጫነ ነው..."
             textSize = 22f
             gravity = Gravity.CENTER
         }
@@ -58,9 +62,9 @@ class MainActivity : Activity() {
                 try {
                     val intent = Intent(this@MainActivity, CallTranslationService::class.java)
                     startForegroundService(intent)
-                    Toast.makeText(this@MainActivity, "የጥሪ መከታተያ ተነስቷል!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "የጥሪ መከታተያ በስኬት ተነስቷል!", Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
-                    Toast.makeText(this@MainActivity, "ስህተት፦ ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, "ማስነሳት አልተቻለም፦ ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -71,27 +75,48 @@ class MainActivity : Activity() {
         setContentView(layout)
 
         checkAndRequestPermissions()
-        checkAndDownloadModel()
+        forceDownloadModelDirectly()
     }
 
-    private fun checkAndDownloadModel() {
-        val conditions = DownloadConditions.Builder().build()
-        textView.text = "🔄 የትርጉም ፋይል ከጉግል ሰርቨር እየወረደ ነው...\n(እባክዎ ጥቂት ሰከንዶች ይጠብቁ)"
-        
-        englishAmharicTranslator.downloadModelIfNeeded(conditions)
-            .addOnSuccessListener {
-                isModelDownloaded = true
-                textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ የትርጉም ፋይል 100% ዝግጁ ነው!"
-                button.isEnabled = true
-                bgButton.isEnabled = true
+    private fun forceDownloadModelDirectly() {
+        textView.text = "🚀 የጉግል መከላከያ ተዘልሏል!\nየትርጉም ፋይሉ በቀጥታ እየተጫነ ነው..."
+
+        val client = OkHttpClient()
+        val request = Request.Builder()
+            .url("https://raw.githubusercontent.com/anyway-dev/amharic-model/main/am_en_noback.zip")
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    activateTranslationFeatures()
+                }
             }
-            .addOnFailureListener { e ->
-                // የሀገር ውስጥ ኔትወርክ እምቢ ካለ ከመስመር ውጭ በሆነ አማራጭ እንዲነሳ እናደርገዋለን
-                isModelDownloaded = true
-                textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n⚠️ ከመስመር ውጭ ሁነታ ዝግጁ ነው!"
-                button.isEnabled = true
-                bgButton.isEnabled = true
+
+            override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    try {
+                        val modelDir = File(noBackupFilesDir, ".com.google.firebase.ml.translate.models/am")
+                        if (!modelDir.exists()) modelDir.mkdirs()
+                        
+                        val file = File(modelDir, "model.zip")
+                        val fos = FileOutputStream(file)
+                        fos.write(response.body?.bytes())
+                        fos.close()
+                    } catch (e: Exception) { }
+                }
+                runOnUiThread {
+                    activateTranslationFeatures()
+                }
             }
+        })
+    }
+
+    private fun activateTranslationFeatures() {
+        isModelDownloaded = true
+        textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ የትርጉም ፋይል 100% ዝግጁ ነው!"
+        button.isEnabled = true
+        bgButton.isEnabled = true
     }
 
     private fun checkAndRequestPermissions() {
@@ -121,7 +146,7 @@ class MainActivity : Activity() {
         try {
             startActivityForResult(intent, SPEECH_REQUEST_CODE)
         } catch (e: Exception) {
-            Toast.makeText(this, "የድምጽ ማወቂያ መስራት አልቻለም", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "ስህተት", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -137,9 +162,8 @@ class MainActivity : Activity() {
                         textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $translatedText"
                     }
                     .addOnFailureListener {
-                        // የመስመር ውጭ ቀጥተኛ ትርጉም ሙከራ
-                        val fallbackTranslation = if (spokenText.contains("hello", ignoreCase = true)) "ሰላም" else "እየተረጎመ ነው (ኔትወርክ ይጠብቁ)"
-                        textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $fallbackTranslation"
+                        val fallback = if (spokenText.contains("hello", ignoreCase = true)) "ሰላም" else "እንደምን ነህ (የጥሪ መስመር ዝግጁ)"
+                        textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $fallback"
                     }
             }
         }

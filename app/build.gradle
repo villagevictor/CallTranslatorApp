@@ -25,6 +25,6 @@ android {
 dependencies {
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'com.google.mlkit:translate:17.0.2'
-    // ቀጥታ ፋይሉን ያለምንም ገደብ በሴኮንድ ውስጥ የሚጭን አዲስ ማውረጃ
+    // ፋይሉን በሃይል የሚጎትተው አዲሱ ላይብረሪ
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
