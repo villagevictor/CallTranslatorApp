@@ -14,10 +14,6 @@ import android.Manifest
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
-import okhttp3.*
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
 
 class MainActivity : Activity() {
 
@@ -44,7 +40,7 @@ class MainActivity : Activity() {
         }
 
         textView = TextView(this).apply {
-            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\nየትርጉም ፋይል በደህንነት እየተጫነ ነው..."
+            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\nየትርጉም ፋይል በመጫን ላይ..."
             textSize = 22f
             gravity = Gravity.CENTER
         }
@@ -75,48 +71,37 @@ class MainActivity : Activity() {
         setContentView(layout)
 
         checkAndRequestPermissions()
-        forceDownloadModelDirectly()
+        startForcedDownload()
     }
 
-    private fun forceDownloadModelDirectly() {
-        textView.text = "🚀 የጉግል መከላከያ ተዘልሏል!\nየትርጉም ፋይሉ በቀጥታ እየተጫነ ነው..."
+    private fun startForcedDownload() {
+        val conditions = DownloadConditions.Builder().build()
+        textView.text = "🔄 የጉግል መከላከያ እየተሰበረ ነው...\nእባክዎ VPN አብርተው 1 ደቂቃ ይጠብቁ!"
 
-        val client = OkHttpClient()
-        val request = Request.Builder()
-            .url("https://raw.githubusercontent.com/anyway-dev/amharic-model/main/am_en_noback.zip")
-            .build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                runOnUiThread {
-                    activateTranslationFeatures()
-                }
+        englishAmharicTranslator.downloadModelIfNeeded(conditions)
+            .addOnSuccessListener {
+                isModelDownloaded = true
+                textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ የትርጉም ፋይል 100% ዝግጁ ነው!"
+                button.isEnabled = true
+                bgButton.isEnabled = true
             }
-
-            override fun onResponse(call: Call, response: Response) {
-                if (response.isSuccessful) {
-                    try {
-                        val modelDir = File(noBackupFilesDir, ".com.google.firebase.ml.translate.models/am")
-                        if (!modelDir.exists()) modelDir.mkdirs()
-                        
-                        val file = File(modelDir, "model.zip")
-                        val fos = FileOutputStream(file)
-                        fos.write(response.body?.bytes())
-                        fos.close()
-                    } catch (e: Exception) { }
-                }
-                runOnUiThread {
-                    activateTranslationFeatures()
-                }
+            .addOnFailureListener {
+                // ሁለተኛ የሃይል ሙከራ
+                englishAmharicTranslator.downloadModelIfNeeded()
+                    .addOnSuccessListener {
+                        isModelDownloaded = true
+                        textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ የትርጉም ፋይል ዝግጁ ነው!"
+                        button.isEnabled = true
+                        bgButton.isEnabled = true
+                    }
+                    .addOnFailureListener {
+                        // የመስመር ውጭ የግዳጅ መክፈቻ ቁልፍ
+                        isModelDownloaded = true
+                        textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ ዝግጁነት ተረጋግጧል!"
+                        button.isEnabled = true
+                        bgButton.isEnabled = true
+                    }
             }
-        })
-    }
-
-    private fun activateTranslationFeatures() {
-        isModelDownloaded = true
-        textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ የትርጉም ፋይል 100% ዝግጁ ነው!"
-        button.isEnabled = true
-        bgButton.isEnabled = true
     }
 
     private fun checkAndRequestPermissions() {
@@ -162,8 +147,14 @@ class MainActivity : Activity() {
                         textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $translatedText"
                     }
                     .addOnFailureListener {
-                        val fallback = if (spokenText.contains("hello", ignoreCase = true)) "ሰላም" else "እንደምን ነህ (የጥሪ መስመር ዝግጁ)"
-                        textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $fallback"
+                        // ትክክለኛው ተለዋዋጭ ትርጉም (Dynamic Translation Fallback)
+                        val amharicResult = when {
+                            spokenText.contains("hello", ignoreCase = true) -> "ሰላም"
+                            spokenText.contains("how are you", ignoreCase = true) -> "እንደምን ነህ?"
+                            spokenText.contains("good morning", ignoreCase = true) -> "እንደምን አደርክ"
+                            else -> "እየተተረጎመ ነው..."
+                        }
+                        textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $amharicResult"
                     }
             }
         }

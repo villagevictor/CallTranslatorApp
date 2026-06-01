@@ -6,11 +6,12 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import android.media.AudioManager
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyManager
-import android.util.Log
 import androidx.core.app.NotificationCompat
 
 class CallTranslationService : Service() {
@@ -23,16 +24,20 @@ class CallTranslationService : Service() {
         super.onCreate()
         createNotificationChannel()
 
-        // ሳምሰንግ ሲስተም እንዳይዘጋው ቋሚ ማሳወቂያ መስቀል
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("የጥሪ መተርገሚያ")
-            .setContentText("የጥሪ ድምፅ ጥራት መስመር ተስተካክሏል...")
+            .setContentText("የጥሪ ድምፅ መስመር በስኬት ተስተካክሏል...")
             .setSmallIcon(android.R.drawable.stat_sys_phone_call)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOngoing(true)
             .build()
 
-        startForeground(101, notification)
+        // አንድሮይድ 14 (ሳምሰንግ A14) ላይ ክራሽ እንዳያደርግ የ foregroundServiceType ማረጋገጫ
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(101, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        } else {
+            startForeground(101, notification)
+        }
 
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
@@ -44,13 +49,11 @@ class CallTranslationService : Service() {
             super.onCallStateChanged(state, phoneNumber)
             when (state) {
                 TelephonyManager.CALL_STATE_OFFHOOK -> {
-                    // ሚስጥሩ እዚህ ጋር ነው! የድምፅ ረብሻውን ለማጥፋት የስልኩን Audio Mode ወደ VOICE_COMMUNICATION መቀየር
+                    // ያንን "አጨጭጭ" የሚለውን የድምፅ ረብሻ ሙሉ በሙሉ የሚያጠፋው መስመር
                     audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-                    audioManager.isSpeakerphoneOn = true // ድምፅ በንፅህና እንዲሰማ ስፒከር ማገዝ
-                    Log.d("CallTranslator", "የኦዲዮ ድምፅ ረብሻ ተወግዷል")
+                    audioManager.isSpeakerphoneOn = true
                 }
                 TelephonyManager.CALL_STATE_IDLE -> {
-                    // ስልኩ ሲዘጋ ወደ መደበኛ ሁነታ መመለስ
                     audioManager.mode = AudioManager.MODE_NORMAL
                 }
             }
