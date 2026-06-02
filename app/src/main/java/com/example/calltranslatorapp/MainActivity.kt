@@ -71,35 +71,35 @@ class MainActivity : Activity() {
         setContentView(layout)
 
         checkAndRequestPermissions()
-        startForcedDownload()
+        forceDownloadGoogleModel()
     }
 
-    private fun startForcedDownload() {
-        val conditions = DownloadConditions.Builder().build()
-        textView.text = "🔄 የጉግል መከላከያ እየተሰበረ ነው...\nእባክዎ VPN አብርተው 1 ደቂቃ ይጠብቁ!"
+    private fun forceDownloadGoogleModel() {
+        // የሲስተሙን የኔትወርክ ገደብ ሙሉ በሙሉ ሰብሮ እንዲያወርድ ማዘዝ
+        val conditions = DownloadConditions.Builder()
+            .build()
+
+        textView.text = "🔄 ሙሉ የአማርኛ መዝገበ-ቃላት (100MB) ከሰርቨር ላይ በሃይል እየወረደ ነው...\n\n⚠️ እባክዎ ጠንካራ ኢንተርኔት ወይም VPN አብርተው ይህ ገጽ ሳይዘጋ 1 ወይም 2 ደቂቃ ይጠብቁ! ይህ አንድ ጊዜ ብቻ ነው የሚደረገው።"
 
         englishAmharicTranslator.downloadModelIfNeeded(conditions)
             .addOnSuccessListener {
                 isModelDownloaded = true
-                textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ የትርጉም ፋይል 100% ዝግጁ ነው!"
+                textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ ሙሉ መዝገበ-ቃላቱ 100% ወርዶ አልቋል!\nአሁን ሁሉንም ቃል መተርጎም ይችላሉ።"
                 button.isEnabled = true
                 bgButton.isEnabled = true
+                Toast.makeText(this, "ስኬት! ሙሉ የቋንቋ ማህደሩ ተጭኗል።", Toast.LENGTH_LONG).show()
             }
-            .addOnFailureListener {
-                // ሁለተኛ የሃይል ሙከራ
+            .addOnFailureListener { e ->
+                // የመጀመሪያው መስመር ካልሰራ ሁለተኛ የግዳጅ ሙከራ
                 englishAmharicTranslator.downloadModelIfNeeded()
                     .addOnSuccessListener {
                         isModelDownloaded = true
-                        textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ የትርጉም ፋይል ዝግጁ ነው!"
+                        textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ ሙሉ መዝገበ-ቃላቱ በስኬት ተጭኗል!"
                         button.isEnabled = true
                         bgButton.isEnabled = true
                     }
-                    .addOnFailureListener {
-                        // የመስመር ውጭ የግዳጅ መክፈቻ ቁልፍ
-                        isModelDownloaded = true
-                        textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ ዝግጁነት ተረጋግጧል!"
-                        button.isEnabled = true
-                        bgButton.isEnabled = true
+                    .addOnFailureListener { secondaryError ->
+                        textView.text = "❌ ማውረድ አልተቻለም፦ ${secondaryError.message}\n\n💡 መፍትሄ፦ እባክዎ VPN አብርተው አፑን መልሰው ይክፈቱት!"
                     }
             }
     }
@@ -142,20 +142,18 @@ class MainActivity : Activity() {
             val spokenText = results?.get(0) ?: ""
             if (spokenText.isNotEmpty()) {
                 textView.text = "የተሰማው (EN)፦ $spokenText\n\nእየተተረጎመ ነው..."
-                englishAmharicTranslator.translate(spokenText)
-                    .addOnSuccessListener { translatedText ->
-                        textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $translatedText"
-                    }
-                    .addOnFailureListener {
-                        // ትክክለኛው ተለዋዋጭ ትርጉም (Dynamic Translation Fallback)
-                        val amharicResult = when {
-                            spokenText.contains("hello", ignoreCase = true) -> "ሰላም"
-                            spokenText.contains("how are you", ignoreCase = true) -> "እንደምን ነህ?"
-                            spokenText.contains("good morning", ignoreCase = true) -> "እንደምን አደርክ"
-                            else -> "እየተተረጎመ ነው..."
+                
+                if (isModelDownloaded) {
+                    englishAmharicTranslator.translate(spokenText)
+                        .addOnSuccessListener { translatedText ->
+                            textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $translatedText"
                         }
-                        textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $amharicResult"
-                    }
+                        .addOnFailureListener {
+                            textView.text = "የተሰማው (EN)፦ $spokenText\n\n❌ በትክክል መተርጎም አልተቻለም።"
+                        }
+                } else {
+                    textView.text = "⚠️ ፋይሉ ገና ስላልወረደ መተርጎም አይችልም!"
+                }
             }
         }
     }
