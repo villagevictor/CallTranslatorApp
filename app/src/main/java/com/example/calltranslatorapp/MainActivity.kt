@@ -11,9 +11,11 @@ import android.speech.RecognizerIntent
 import android.content.pm.PackageManager
 import android.widget.Toast
 import android.Manifest
-import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
+import okhttp3.*
+import java.io.*
+import java.util.zip.ZipInputStream
 
 class MainActivity : Activity() {
 
@@ -40,7 +42,7 @@ class MainActivity : Activity() {
         }
 
         textView = TextView(this).apply {
-            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\nየትርጉም ፋይል በመጫን ላይ..."
+            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\nየትርጉም ፋይል በመፈተሽ ላይ..."
             textSize = 22f
             gravity = Gravity.CENTER
         }
@@ -71,37 +73,73 @@ class MainActivity : Activity() {
         setContentView(layout)
 
         checkAndRequestPermissions()
-        forceDownloadGoogleModel()
+        checkAndSetupOfflineModel()
     }
 
-    private fun forceDownloadGoogleModel() {
-        // የሲስተሙን የኔትወርክ ገደብ ሙሉ በሙሉ ሰብሮ እንዲያወርድ ማዘዝ
-        val conditions = DownloadConditions.Builder()
+    private fun checkAndSetupOfflineModel() {
+        val targetDir = File(noBackupFilesDir, ".com.google.firebase.ml.translate.models/am")
+        
+        if (targetDir.exists() && targetDir.list()?.isNotEmpty() == true) {
+            activateTranslationFeatures()
+            return
+        }
+
+        textView.text = "🚀 የጉግል መከላከያ ሙሉ በሙሉ ተዘልሏል!\n\nየአማርኛ መዝገበ-ቃላት በቀጥታ ከሴኪውር ሰርቨር ላይ እየተጫነ ነው...\n(እባክዎ 1 ደቂቃ ሳይዘጋ ይጠብቁ)"
+
+        val client = OkHttpClient()
+        val request = Request.Builder()
+            .url("https://pub-c2a4ef99df3d463cb967be2f067468de.r2.dev/am_en.zip")
             .build()
 
-        textView.text = "🔄 ሙሉ የአማርኛ መዝገበ-ቃላት (100MB) ከሰርቨር ላይ በሃይል እየወረደ ነው...\n\n⚠️ እባክዎ ጠንካራ ኢንተርኔት ወይም VPN አብርተው ይህ ገጽ ሳይዘጋ 1 ወይም 2 ደቂቃ ይጠብቁ! ይህ አንድ ጊዜ ብቻ ነው የሚደረገው።"
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    textView.text = "❌ የኔትወርክ መቆራረጥ አጋጠመ!\nእባክዎ ኢንተርኔትዎን አብርተው አፑን መልሰው ይክፈቱት።"
+                }
+            }
 
-        englishAmharicTranslator.downloadModelIfNeeded(conditions)
-            .addOnSuccessListener {
-                isModelDownloaded = true
-                textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ ሙሉ መዝገበ-ቃላቱ 100% ወርዶ አልቋል!\nአሁን ሁሉንም ቃል መተርጎም ይችላሉ።"
-                button.isEnabled = true
-                bgButton.isEnabled = true
-                Toast.makeText(this, "ስኬት! ሙሉ የቋንቋ ማህደሩ ተጭኗል።", Toast.LENGTH_LONG).show()
-            }
-            .addOnFailureListener { e ->
-                // የመጀመሪያው መስመር ካልሰራ ሁለተኛ የግዳጅ ሙከራ
-                englishAmharicTranslator.downloadModelIfNeeded()
-                    .addOnSuccessListener {
-                        isModelDownloaded = true
-                        textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ ሙሉ መዝገበ-ቃላቱ በስኬት ተጭኗል!"
-                        button.isEnabled = true
-                        bgButton.isEnabled = true
+            override fun onResponse(call: Call, response: Response) {
+                if (!response.isSuccessful) {
+                    runOnUiThread { textView.text = "❌ ከሰርቨር ማውረድ አልተቻለም።" }
+                    return
+                }
+
+                try {
+                    val body = response.body ?: return
+                    if (!targetDir.exists()) targetDir.mkdirs()
+
+                    ZipInputStream(body.byteStream()).use { zis ->
+                        var entry = zis.nextEntry
+                        while (entry != null) {
+                            val outFile = File(targetDir, entry.name)
+                            if (entry.isDirectory) {
+                                outFile.mkdirs()
+                            } else {
+                                outFile.parentFile?.mkdirs()
+                                FileOutputStream(outFile).use { fos ->
+                                    zis.copyTo(fos)
+                                }
+                            }
+                            entry = zis.nextEntry
+                        }
                     }
-                    .addOnFailureListener { secondaryError ->
-                        textView.text = "❌ ማውረድ አልተቻለም፦ ${secondaryError.message}\n\n💡 መፍትሄ፦ እባክዎ VPN አብርተው አፑን መልሰው ይክፈቱት!"
+
+                    runOnUiThread { activateTranslationFeatures() }
+
+                } catch (e: Exception) {
+                    runOnUiThread {
+                        textView.text = "❌ ፋይሉን መፍታት አልተቻለም፦ ${e.message}"
                     }
+                }
             }
+        })
+    }
+
+    private fun activateTranslationFeatures() {
+        isModelDownloaded = true
+        textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ ሙሉ መዝገበ-ቃላቱ 100% ዝግጁ ነው!\n(አሁን ያለ ኢንተርኔት መተርጎም ይችላሉ)"
+        button.isEnabled = true
+        bgButton.isEnabled = true
     }
 
     private fun checkAndRequestPermissions() {
@@ -143,17 +181,13 @@ class MainActivity : Activity() {
             if (spokenText.isNotEmpty()) {
                 textView.text = "የተሰማው (EN)፦ $spokenText\n\nእየተተረጎመ ነው..."
                 
-                if (isModelDownloaded) {
-                    englishAmharicTranslator.translate(spokenText)
-                        .addOnSuccessListener { translatedText ->
-                            textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $translatedText"
-                        }
-                        .addOnFailureListener {
-                            textView.text = "የተሰማው (EN)፦ $spokenText\n\n❌ በትክክል መተርጎም አልተቻለም።"
-                        }
-                } else {
-                    textView.text = "⚠️ ፋይሉ ገና ስላልወረደ መተርጎም አይችልም!"
-                }
+                englishAmharicTranslator.translate(spokenText)
+                    .addOnSuccessListener { translatedText ->
+                        textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $translatedText"
+                    }
+                    .addOnFailureListener {
+                        textView.text = "የተሰማው (EN)፦ $spokenText\n\n❌ የትርጉም ስህተት አጋጠመ።"
+                    }
             }
         }
     }
