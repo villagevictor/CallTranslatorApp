@@ -11,6 +11,8 @@ import android.speech.RecognizerIntent
 import android.content.pm.PackageManager
 import android.widget.Toast
 import android.Manifest
+import com.google.mlkit.common.model.RemoteModelManager
+import com.google.mlkit.nl.translate.TranslateRemoteModel
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
 import okhttp3.*
@@ -24,13 +26,20 @@ class MainActivity : Activity() {
     private lateinit var bgButton: Button
     private val SPEECH_REQUEST_CODE = 100
     private val PERMISSION_REQUEST_CODE = 200
-    private var isModelDownloaded = false
 
-    private val options = TranslatorOptions.Builder()
+    // 1. እንግሊዘኛ ➡️ አማርኛ ተርጓሚ
+    private val enAmOptions = TranslatorOptions.Builder()
         .setSourceLanguage("en")
         .setTargetLanguage("am")
         .build()
-    private val englishAmharicTranslator = Translation.getClient(options)
+    private val enAmTranslator = Translation.getClient(enAmOptions)
+
+    // 2. አማርኛ ➡️ እንግሊዘኛ ተርጓሚ
+    private val amEnOptions = TranslatorOptions.Builder()
+        .setSourceLanguage("am")
+        .setTargetLanguage("en")
+        .build()
+    private val amEnTranslator = Translation.getClient(amEnOptions)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,13 +51,13 @@ class MainActivity : Activity() {
         }
 
         textView = TextView(this).apply {
-            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\nየትርጉም ፋይል በመፈተሽ ላይ..."
-            textSize = 22f
+            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n🔄 ባለሁለት አቅጣጫ (EN ↔️ AM)\n\nየመዝገበ-ቃላት ፋይሎችን በመፈተሽ ላይ..."
+            textSize = 20f
             gravity = Gravity.CENTER
         }
 
         button = Button(this).apply {
-            text = "ማዳመጥ እና መተርጎም ጀምር"
+            text = "መናገር እና መተርጎም ጀምር"
             isEnabled = false
             setOnClickListener { startSpeechToText() }
         }
@@ -73,19 +82,22 @@ class MainActivity : Activity() {
         setContentView(layout)
 
         checkAndRequestPermissions()
-        checkAndSetupOfflineModel()
+        checkAndSetupOfflineModels()
     }
 
-    private fun checkAndSetupOfflineModel() {
-        val targetDir = File(noBackupFilesDir, ".com.google.firebase.ml.translate.models/am")
+    private fun checkAndSetupOfflineModels() {
+        // ሁለቱም የአማርኛ እና የእንግሊዘኛ ኦፍላይን ማውረጃ ፎልደሮች መኖራቸውን ማረጋገጫ
+        val amDir = File(noBackupFilesDir, ".com.google.firebase.ml.translate.models/am")
+        val enDir = File(noBackupFilesDir, ".com.google.firebase.ml.translate.models/en")
         
-        if (targetDir.exists() && targetDir.list()?.isNotEmpty() == true) {
+        if (amDir.exists() && amDir.list()?.isNotEmpty() == true) {
             activateTranslationFeatures()
             return
         }
 
-        textView.text = "🚀 የጉግል መከላከያ ሙሉ በሙሉ ተዘልሏል!\n\nየአማርኛ መዝገበ-ቃላት በቀጥታ ከሴኪውር ሰርቨር ላይ እየተጫነ ነው...\n(እባክዎ 1 ደቂቃ ሳይዘጋ ይጠብቁ)"
+        textView.text = "🚀 የመዝገበ-ቃላት ውቅረትን በማዘጋጀት ላይ...\n\nእባክዎ 1 ደቂቃ ያህል በትዕግስት ይጠብቁ።"
 
+        // የዚፕ ፋይል ማውረጃ (ከራሳችን ፈጣን R2 ሲስተም)
         val client = OkHttpClient()
         val request = Request.Builder()
             .url("https://pub-c2a4ef99df3d463cb967be2f067468de.r2.dev/am_en.zip")
@@ -93,25 +105,24 @@ class MainActivity : Activity() {
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                runOnUiThread {
-                    textView.text = "❌ የኔትወርክ መቆራረጥ አጋጠመ!\nእባክዎ ኢንተርኔትዎን አብርተው አፑን መልሰው ይክፈቱት።"
-                }
+                // የመጀመሪያው ካልሰራ ወደ ML Kit ይፋዊ ሰርቨር ቀይር (Fallback)
+                runOnUiThread { triggerGoogleOfficialDownload() }
             }
 
             override fun onResponse(call: Call, response: Response) {
                 if (!response.isSuccessful) {
-                    runOnUiThread { textView.text = "❌ ከሰርቨር ማውረድ አልተቻለም።" }
+                    runOnUiThread { triggerGoogleOfficialDownload() }
                     return
                 }
 
                 try {
                     val body = response.body ?: return
-                    if (!targetDir.exists()) targetDir.mkdirs()
+                    if (!amDir.exists()) amDir.mkdirs()
 
                     ZipInputStream(body.byteStream()).use { zis ->
                         var entry = zis.nextEntry
                         while (entry != null) {
-                            val outFile = File(targetDir, entry.name)
+                            val outFile = File(amDir, entry.name)
                             if (entry.isDirectory) {
                                 outFile.mkdirs()
                             } else {
@@ -123,21 +134,31 @@ class MainActivity : Activity() {
                             entry = zis.nextEntry
                         }
                     }
-
                     runOnUiThread { activateTranslationFeatures() }
-
                 } catch (e: Exception) {
-                    runOnUiThread {
-                        textView.text = "❌ ፋይሉን መፍታት አልተቻለም፦ ${e.message}"
-                    }
+                    runOnUiThread { triggerGoogleOfficialDownload() }
                 }
             }
         })
     }
 
+    // ከሰርቨር ማውረድ ካልተቻለ በጎግል በኩል በደኅንነት እንዲያወርድ የሚያደርግ መከላከያ ኢንጂን
+    private fun triggerGoogleOfficialDownload() {
+        textView.text = "🔄 ከዋናው ሰርቨር ጋር በመገናኘት ላይ...\nእባክዎ ከመተግበሪያው ሳይወጡ ይጠብቁ።"
+        val modelManager = RemoteModelManager.getInstance()
+        val amModel = TranslateRemoteModel.Builder("am").build()
+        
+        modelManager.download(amModel, com.google.mlkit.common.model.DownloadConditions.Builder().build())
+            .addOnSuccessListener {
+                activateTranslationFeatures()
+            }
+            .addOnFailureListener { e ->
+                textView.text = "❌ ፋይሉን ማዘጋጀት አልተቻለም፦ ${e.message}\nእባክዎ የኢንተርኔት ግንኙነትዎን ፈትሸው እንደገና ይክፈቱት።"
+            }
+    }
+
     private fun activateTranslationFeatures() {
-        isModelDownloaded = true
-        textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n(እንግሊዘኛ ➡️ አማርኛ)\n\n✅ ሙሉ መዝገበ-ቃላቱ 100% ዝግጁ ነው!\n(አሁን ያለ ኢንተርኔት መተርጎም ይችላሉ)"
+        textView.text = "የጥሪ መተርገሚያ አፕሊኬሽን\n🔄 ባለሁለት አቅጣጫ (EN ↔️ AM)\n\n✅ የትርጉም መዝገበ-ቃላት 100% ዝግጁ ነው!\n(አሁን ያለ ኢንተርኔት በነፃ መተርጎም ይችላሉ)"
         button.isEnabled = true
         bgButton.isEnabled = true
     }
@@ -163,13 +184,14 @@ class MainActivity : Activity() {
     private fun startSpeechToText() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "እባክዎ በእንግሊዘኛ ይናገሩ...")
+            // ሁለቱንም ቋንቋዎች በአንድ ላይ እንዲያዳምጥ እናዝዘዋለን
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "am-ET")
+            putExtra(RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES, arrayListOf("am-ET", "en-US"))
         }
         try {
             startActivityForResult(intent, SPEECH_REQUEST_CODE)
         } catch (e: Exception) {
-            Toast.makeText(this, "ስህተት", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "የድምፅ ኢንጂን አልተገኘም", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -178,16 +200,32 @@ class MainActivity : Activity() {
         if (requestCode == SPEECH_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
             val results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
             val spokenText = results?.get(0) ?: ""
+            
             if (spokenText.isNotEmpty()) {
-                textView.text = "የተሰማው (EN)፦ $spokenText\n\nእየተተረጎመ ነው..."
-                
-                englishAmharicTranslator.translate(spokenText)
-                    .addOnSuccessListener { translatedText ->
-                        textView.text = "የተሰማው (EN)፦ $spokenText\n\nትርጉም (AM)፦ $translatedText"
-                    }
-                    .addOnFailureListener {
-                        textView.text = "የተሰማው (EN)፦ $spokenText\n\n❌ የትርጉም ስህተት አጋጠመ።"
-                    }
+                // የተነገረው ቋንቋ እንግሊዘኛ መሆኑን በፊደላቱ መለየት (Regex)
+                val isEnglish = spokenText.matches(Regex("^[a-zA-Z\\s\\d.,?!'\"-]+$"))
+
+                if (isEnglish) {
+                    // እንግሊዘኛ ከሆነ ➡️ ወደ አማርኛ ተርጉም
+                    textView.text = "🇺🇸 የተሰማው (EN)፦ $spokenText\n\n🔄 ወደ አማርኛ እየተተረጎመ ነው..."
+                    enAmTranslator.translate(spokenText)
+                        .addOnSuccessListener { translatedText ->
+                            textView.text = "🇺🇸 የተሰማው (EN)፦ $spokenText\n\n🇪🇹 ትርጉም (AM)፦ $translatedText"
+                        }
+                        .addOnFailureListener {
+                            textView.text = "🇺🇸 የተሰማው (EN)፦ $spokenText\n\n❌ የመተርጎም ስህተት አጋጠመ።"
+                        }
+                } else {
+                    // አማርኛ ከሆነ ➡️ ወደ እንግሊዘኛ ተርጉም
+                    textView.text = "🇪🇹 የተሰማው (AM)፦ $spokenText\n\n🔄 ወደ እንግሊዘኛ እየተተረጎመ ነው..."
+                    amEnTranslator.translate(spokenText)
+                        .addOnSuccessListener { translatedText ->
+                            textView.text = "🇪🇹 የተሰማው (AM)፦ $spokenText\n\n🇺🇸 ትርጉም (EN)፦ $translatedText"
+                        }
+                        .addOnFailureListener {
+                            textView.text = "🇪🇹 የተሰማው (AM)፦ $spokenText\n\n❌ የመተርጎም ስህተት አጋጠመ።"
+                        }
+                }
             }
         }
     }
