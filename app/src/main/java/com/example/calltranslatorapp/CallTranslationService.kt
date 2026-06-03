@@ -145,11 +145,11 @@ class CallTranslationService : Service() {
             manager.createNotificationChannel(channel)
         }
 
-        // እዚህ ጋር ስህተት የፈጠረውን ic_menu_mic ወደ presence_micro_phone ቀይረነዋል
+        // እዚህ ጋር ስህተት የፈጠረውን ምስል 100% ወደሚሠራው መደበኛ ስታር ቀይረነዋል
         return Notification.Builder(this, channelId)
             .setContentTitle("የጥሪ መተርገሚያ መስመር")
             .setContentText("አፑ ከጀርባ ሆኖ ጥሪውን እያዳመጠ ነው...")
-            .setSmallIcon(android.R.drawable.presence_micro_phone)
+            .setSmallIcon(android.R.drawable.star_on)
             .build()
     }
 
