@@ -26,7 +26,6 @@ class CallTranslationService : Service() {
 
     private var speechRecognizer: SpeechRecognizer? = null
     private var windowManager: WindowManager? = null
-    private var overlayView: View? = null
     private var overlayTextView: TextView? = null
     private var audioManager: AudioManager? = null
 
@@ -42,7 +41,6 @@ class CallTranslationService : Service() {
         audioManager = getApplicationContext().getSystemService(Context.AUDIO_SERVICE) as AudioManager
         startForeground(1, createNotification())
         
-        // ➡️ Speakerphone ON ማድረግ (ድምፁ ለአፑ በደንብ እንዲሰማው)
         try {
             audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
             audioManager?.isSpeakerphoneOn = true
@@ -57,7 +55,6 @@ class CallTranslationService : Service() {
     private fun setupOverlayWindow() {
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         
-        // በኮድ ተንሳፋፊ ጽሑፍ ማሳያ ማዘጋጀት
         overlayTextView = TextView(this).apply {
             text = "🎙️ ጥሪ በመተንተን ላይ... መናገር ይችላሉ"
             textSize = 18f
@@ -100,12 +97,10 @@ class CallTranslationService : Service() {
             override fun onBufferReceived(buffer: ByteArray?) {}
             
             override fun onEndOfSpeech() {
-                // ንግግር ሲያበቃ ወዲያውኑ መልሶ ማዳመጥ እንዲጀምር (Continuous Loop)
                 speechRecognizer?.startListening(intent)
             }
 
             override fun onError(error: Int) {
-                // ስህተት ቢፈጠርም አፑ ሳይዘጋ መልሶ ማዳመጥ ይጀምራል
                 speechRecognizer?.startListening(intent)
             }
 
@@ -117,14 +112,12 @@ class CallTranslationService : Service() {
                     val isEnglish = spokenText.matches(Regex("^[a-zA-Z\\s\\d.,?!'\"-]+$"))
                     
                     if (isEnglish) {
-                        // እንግሊዘኛ ከሆነ ➡️ ወደ አማርኛ
                         enAmTranslator.translate(spokenText).addOnSuccessListener { trans ->
                             overlayTextView?.text = "🇺🇸 EN: $spokenText\n🇪🇹 AM: $trans"
                         }.addOnFailureListener {
                             overlayTextView?.text = "🇺🇸 EN: $spokenText\n🇪🇹 AM: [ትርጉም አልተሳካም]"
                         }
                     } else {
-                        // አማርኛ ከሆነ ➡️ ወደ እንግሊዘኛ
                         amEnTranslator.translate(spokenText).addOnSuccessListener { trans ->
                             overlayTextView?.text = "🇪🇹 AM: $spokenText\n🇺🇸 EN: $trans"
                         }.addOnFailureListener {
@@ -132,7 +125,6 @@ class CallTranslationService : Service() {
                         }
                     }
                 }
-                // ቀጣዩን ንግግር ለመስማት ዝግጁ መሆን
                 speechRecognizer?.startListening(intent)
             }
 
@@ -153,10 +145,11 @@ class CallTranslationService : Service() {
             manager.createNotificationChannel(channel)
         }
 
+        // እዚህ ጋር ስህተት የፈጠረውን ic_menu_mic ወደ presence_micro_phone ቀይረነዋል
         return Notification.Builder(this, channelId)
             .setContentTitle("የጥሪ መተርገሚያ መስመር")
             .setContentText("አፑ ከጀርባ ሆኖ ጥሪውን እያዳመጠ ነው...")
-            .setSmallIcon(android.R.drawable.ic_menu_mic)
+            .setSmallIcon(android.R.drawable.presence_micro_phone)
             .build()
     }
 
