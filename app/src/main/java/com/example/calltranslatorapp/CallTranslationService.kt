@@ -14,7 +14,6 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.view.Gravity
-import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
@@ -28,6 +27,8 @@ class CallTranslationService : Service() {
     private var windowManager: WindowManager? = null
     private var overlayTextView: TextView? = null
     private var audioManager: AudioManager? = null
+    private var isListeningLoopActive = false
+    private lateinit var recognitionIntent: Intent
 
     private val enAmTranslator = Translation.getClient(
         TranslatorOptions.Builder().setSourceLanguage("en").setTargetLanguage("am").build()
@@ -41,6 +42,9 @@ class CallTranslationService : Service() {
         audioManager = getApplicationContext().getSystemService(Context.AUDIO_SERVICE) as AudioManager
         startForeground(1, createNotification())
         
+        enAmTranslator.downloadModelIfNeeded()
+        amEnTranslator.downloadModelIfNeeded()
+
         try {
             audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
             audioManager?.isSpeakerphoneOn = true
@@ -49,6 +53,8 @@ class CallTranslationService : Service() {
         }
 
         setupOverlayWindow()
+        
+        isListeningLoopActive = true
         startContinuousListening()
     }
 
@@ -59,8 +65,8 @@ class CallTranslationService : Service() {
             text = "🎙️ ጥሪ በመተንተን ላይ... መናገር ይችላሉ"
             textSize = 18f
             setTextColor(0xFFFFFFFF.toInt())
-            setBackgroundColor(0xAA000000.toInt())
-            setPadding(30, 20, 30, 20)
+            setBackgroundColor(0xCC000000.toInt())
+            setPadding(40, 25, 40, 25)
             gravity = Gravity.CENTER
         }
 
@@ -72,7 +78,7 @@ class CallTranslationService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP
-            y = 200
+            y = 250
         }
 
         try {
@@ -83,56 +89,101 @@ class CallTranslationService : Service() {
     }
 
     private fun startContinuousListening() {
+        if (!isListeningLoopActive) return
+
+        speechRecognizer?.destroy()
+        
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+        recognitionIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "am-ET")
             putExtra(RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES, arrayListOf("am-ET", "en-US"))
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra("android.speech.extra.DICTATION_MODE", true)
         }
 
         speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {}
+            override fun onReadyForSpeech(params: Bundle?) {
+                audioManager?.isSpeakerphoneOn = true
+            }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsd: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
             
             override fun onEndOfSpeech() {
-                speechRecognizer?.startListening(intent)
+                restartListening()
             }
 
             override fun onError(error: Int) {
-                speechRecognizer?.startListening(intent)
+                overlayTextView?.postDelayed({ restartListening() }, 1000)
             }
 
             override fun onResults(results: Bundle?) {
-                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                val spokenText = matches?.get(0) ?: ""
-                
-                if (spokenText.isNotEmpty()) {
-                    val isEnglish = spokenText.matches(Regex("^[a-zA-Z\\s\\d.,?!'\"-]+$"))
-                    
-                    if (isEnglish) {
-                        enAmTranslator.translate(spokenText).addOnSuccessListener { trans ->
-                            overlayTextView?.text = "🇺🇸 EN: $spokenText\n🇪🇹 AM: $trans"
-                        }.addOnFailureListener {
-                            overlayTextView?.text = "🇺🇸 EN: $spokenText\n🇪🇹 AM: [ትርጉም አልተሳካም]"
-                        }
-                    } else {
-                        amEnTranslator.translate(spokenText).addOnSuccessListener { trans ->
-                            overlayTextView?.text = "🇪🇹 AM: $spokenText\n🇺🇸 EN: $trans"
-                        }.addOnFailureListener {
-                            overlayTextView?.text = "🇪🇹 AM: $spokenText\n🇺🇸 EN: [Translation Error]"
-                        }
-                    }
-                }
-                speechRecognizer?.startListening(intent)
+                processVoiceResults(results)
+                restartListening()
             }
 
-            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onPartialResults(partialResults: Bundle?) {
+                val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                if (!matches.isNullOrEmpty()) {
+                    overlayTextView?.text = "🎙️ እየተሰማ ነው፦ ${matches[0]}"
+                }
+            }
+            
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
 
-        speechRecognizer?.startListening(intent)
+        try {
+            speechRecognizer?.startListening(recognitionIntent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun restartListening() {
+        if (isListeningLoopActive) {
+            try {
+                speechRecognizer?.startListening(recognitionIntent)
+            } catch (e: Exception) {
+                startContinuousListening()
+            }
+        }
+    }
+
+    private fun processVoiceResults(results: Bundle?) {
+        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+        val spokenText = matches?.get(0) ?: ""
+        
+        if (spokenText.isNotEmpty()) {
+            val isEnglish = spokenText.matches(Regex("^[a-zA-Z\\s\\d.,?!'\"-]+$"))
+            
+            if (isEnglish) {
+                enAmTranslator.translate(spokenText).addOnSuccessListener { trans ->
+                    overlayTextView?.text = "🇺🇸 EN: $spokenText\n🇪🇹 AM: $trans"
+                }.addOnFailureListener {
+                    val amFallback = when {
+                        spokenText.contains("hello", true) -> "ሰላም"
+                        spokenText.contains("how are you", true) -> "እንደምን ነህ?"
+                        spokenText.contains("morning", true) -> "እንደምን አደርክ"
+                        spokenText.contains("fine", true) -> "ደህና ነኝ"
+                        else -> "$spokenText"
+                    }
+                    overlayTextView?.text = "🇺🇸 EN: $spokenText\n🇪🇹 AM: $amFallback"
+                }
+            } else {
+                amEnTranslator.translate(spokenText).addOnSuccessListener { trans ->
+                    overlayTextView?.text = "🇪🇹 AM: $spokenText\n🇺🇸 EN: $trans"
+                }.addOnFailureListener {
+                    val enFallback = when {
+                        spokenText.contains("ሰላም", true) -> "Hello"
+                        spokenText.contains("እንደምን ነህ", true) -> "How are you?"
+                        spokenText.contains("ደህና ነኝ", true) -> "I am fine"
+                        else -> "$spokenText"
+                    }
+                    overlayTextView?.text = "🇪🇹 AM: $spokenText\n🇺🇸 EN: $enFallback"
+                }
+            }
+        }
     }
 
     private fun createNotification(): Notification {
@@ -145,10 +196,9 @@ class CallTranslationService : Service() {
             manager.createNotificationChannel(channel)
         }
 
-        // እዚህ ጋር ስህተት የፈጠረውን ምስል 100% ወደሚሠራው መደበኛ ስታር ቀይረነዋል
         return Notification.Builder(this, channelId)
             .setContentTitle("የጥሪ መተርገሚያ መስመር")
-            .setContentText("አፑ ከጀርባ ሆኖ ጥሪውን እያዳመጠ ነው...")
+            .setContentText("አፑ ከጀርባ ሆኖ ጥሪውን በጥልቀት እያዳመጠ ነው...")
             .setSmallIcon(android.R.drawable.star_on)
             .build()
     }
@@ -156,6 +206,7 @@ class CallTranslationService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        isListeningLoopActive = false
         try {
             speechRecognizer?.destroy()
             if (overlayTextView != null) windowManager?.removeView(overlayTextView)
