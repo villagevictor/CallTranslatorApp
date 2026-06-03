@@ -13,8 +13,6 @@ import android.os.IBinder
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.telephony.PhoneStateListener
-import android.telephony.TelephonyManager
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -26,15 +24,12 @@ import java.util.ArrayList
 
 class CallTranslationService : Service() {
 
+    private var speechRecognizer: SpeechRecognizer? = null
     private var windowManager: WindowManager? = null
     private var overlayView: View? = null
-    private var textViewSubtitle: TextView? = null
-    private var speechRecognizer: SpeechRecognizer? = null
-    private var telephonyManager: TelephonyManager? = null
-    private var phoneStateListener: PhoneStateListener? = null
+    private var overlayTextView: TextView? = null
     private var audioManager: AudioManager? = null
 
-    // የትርጉም ሞተሮች
     private val enAmTranslator = Translation.getClient(
         TranslatorOptions.Builder().setSourceLanguage("en").setTargetLanguage("am").build()
     )
@@ -42,44 +37,32 @@ class CallTranslationService : Service() {
         TranslatorOptions.Builder().setSourceLanguage("am").setTargetLanguage("en").build()
     )
 
-    override fun onBind(intent: Intent?): IBinder? = null
-
     override fun onCreate() {
         super.onCreate()
-        audioManager = getOrCreateAudioManager()
-        startForegroundServiceNotification()
-        showOverlayWindow()
-        setupPhoneCallListener()
+        audioManager = getApplicationContext().getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        startForeground(1, createNotification())
+        
+        // ➡️ Speakerphone ON ማድረግ (ድምፁ ለአፑ በደንብ እንዲሰማው)
+        try {
+            audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
+            audioManager?.isSpeakerphoneOn = true
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        setupOverlayWindow()
+        startContinuousListening()
     }
 
-    private fun getOrCreateAudioManager(): AudioManager {
-        return getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    }
-
-    private fun startForegroundServiceNotification() {
-        val channelId = "call_translator_channel"
-        val channel = NotificationChannel(channelId, "Call Translation", NotificationManager.IMPORTANCE_LOW)
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(channel)
-
-        val notification = Notification.Builder(this, channelId)
-            .setContentTitle("የጥሪ መተርገሚያው በጀርባ እየሰራ ነው")
-            .setContentText("በጥሪ ጊዜ ድምፅን በራስ-ሰር ያዳምጣል...")
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .build()
-
-        startForeground(1, notification)
-    }
-
-    private fun showOverlayWindow() {
+    private fun setupOverlayWindow() {
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         
-        // ቀለል ያለ ተንሳፋፊ ጽሑፍ ማሳያ ማዘጋጀት
-        textViewSubtitle = TextView(this).apply {
-            text = "🎙️ ጥሪ ሲጀመር ትርጉሙ እዚህ ላይ ይታያል..."
+        // በኮድ ተንሳፋፊ ጽሑፍ ማሳያ ማዘጋጀት
+        overlayTextView = TextView(this).apply {
+            text = "🎙️ ጥሪ በመተንተን ላይ... መናገር ይችላሉ"
             textSize = 18f
-            setTextColor(android.graphics.Color.WHITE)
-            setBackgroundColor(android.graphics.Color.parseColor("#CC000000")) // ከፊል ግልፅ ጥቁር
+            setTextColor(0xFFFFFFFF.toInt())
+            setBackgroundColor(0xAA000000.toInt())
             setPadding(30, 20, 30, 20)
             gravity = Gravity.CENTER
         }
@@ -88,131 +71,105 @@ class CallTranslationService : Service() {
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP
-            y = 150 // ከላይ ትንሽ ዝቅ ብሎ እንዲቀመጥ
+            y = 200
         }
 
-        windowManager?.addView(textViewSubtitle, params)
-    }
-
-    private fun setupPhoneCallListener() {
-        telephonyManager = getSystemService(Context.TELEPHONY_MANAGER) as TelephonyManager
-        phoneStateListener = object : PhoneStateListener() {
-            override fun onCallStateChanged(state: Int, phoneNumber: String?) {
-                when (state) {
-                    TelephonyManager.CALL_STATE_OFFHOOK -> {
-                        // ጥሪው ሲጀመር ስፒከር ማብራት እና ማዳመጥ መጀመር
-                        activateSpeakerPhone()
-                        startContinuousSpeechRecognition()
-                    }
-                    TelephonyManager.CALL_STATE_IDLE -> {
-                        // ጥሪው ሲዘጋ ማዳመጥ ማቆም
-                        stopSpeechRecognition()
-                    }
-                }
-            }
-        }
-        telephonyManager?.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE)
-    }
-
-    private fun activateSpeakerPhone() {
         try {
-            audioManager?.apply {
-                mode = AudioManager.MODE_IN_COMMUNICATION
-                isSpeakerphoneOn = true
-            }
+            windowManager?.addView(overlayTextView, params)
         } catch (e: Exception) {
-            updateSubtitle("⚠️ ስፒከር ማብራት አልተቻለም")
+            e.printStackTrace()
         }
     }
 
-    private fun startContinuousSpeechRecognition() {
-        if (speechRecognizer != null) return
-
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
-            setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) {
-                    updateSubtitle("🎙️ እያዳመጥኩ ነው... ይናገሩ")
-                }
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() {}
-                override fun onError(error: Int) {
-                    // ስህተት ሲፈጠር (ለምሳሌ ዝምታ ከተፈጠረ) ራሱን በራሱ መልሶ እንዲቀሰቅስ ማድረግ (Continuous Loop)
-                    speechRecognizer?.destroy()
-                    speechRecognizer = null
-                    startContinuousSpeechRecognition()
-                }
-
-                override fun onResults(results: Bundle?) {
-                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    val spokenText = matches?.get(0) ?: ""
-                    
-                    if (spokenText.isNotEmpty()) {
-                        processAndTranslate(spokenText)
-                    }
-                    
-                    // ውጤቱን ካሳየ በኋላ ወዲያውኑ ማዳመጡን በቋሚነት መቀጠል
-                    speechRecognizer?.destroy()
-                    speechRecognizer = null
-                    startContinuousSpeechRecognition()
-                }
-
-                override fun onPartialResults(partialResults: Bundle?) {}
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
-        }
-
+    private fun startContinuousListening() {
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "am-ET")
             putExtra(RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES, arrayListOf("am-ET", "en-US"))
         }
+
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsd: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            
+            override fun onEndOfSpeech() {
+                // ንግግር ሲያበቃ ወዲያውኑ መልሶ ማዳመጥ እንዲጀምር (Continuous Loop)
+                speechRecognizer?.startListening(intent)
+            }
+
+            override fun onError(error: Int) {
+                // ስህተት ቢፈጠርም አፑ ሳይዘጋ መልሶ ማዳመጥ ይጀምራል
+                speechRecognizer?.startListening(intent)
+            }
+
+            override fun onResults(results: Bundle?) {
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                val spokenText = matches?.get(0) ?: ""
+                
+                if (spokenText.isNotEmpty()) {
+                    val isEnglish = spokenText.matches(Regex("^[a-zA-Z\\s\\d.,?!'\"-]+$"))
+                    
+                    if (isEnglish) {
+                        // እንግሊዘኛ ከሆነ ➡️ ወደ አማርኛ
+                        enAmTranslator.translate(spokenText).addOnSuccessListener { trans ->
+                            overlayTextView?.text = "🇺🇸 EN: $spokenText\n🇪🇹 AM: $trans"
+                        }.addOnFailureListener {
+                            overlayTextView?.text = "🇺🇸 EN: $spokenText\n🇪🇹 AM: [ትርጉም አልተሳካም]"
+                        }
+                    } else {
+                        // አማርኛ ከሆነ ➡️ ወደ እንግሊዘኛ
+                        amEnTranslator.translate(spokenText).addOnSuccessListener { trans ->
+                            overlayTextView?.text = "🇪🇹 AM: $spokenText\n🇺🇸 EN: $trans"
+                        }.addOnFailureListener {
+                            overlayTextView?.text = "🇪🇹 AM: $spokenText\n🇺🇸 EN: [Translation Error]"
+                        }
+                    }
+                }
+                // ቀጣዩን ንግግር ለመስማት ዝግጁ መሆን
+                speechRecognizer?.startListening(intent)
+            }
+
+            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+
         speechRecognizer?.startListening(intent)
     }
 
-    private fun processAndTranslate(text: String) {
-        val isEnglish = text.matches(Regex("^[a-zA-Z\\s\\d.,?!'\"-]+$"))
+    private fun createNotification(): Notification {
+        val channelId = "call_translator_channel"
+        val channelName = "Call Translation Running"
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         
-        if (isEnglish) {
-            enAmTranslator.translate(text)
-                .addOnSuccessListener { translated ->
-                    updateSubtitle("🇺🇸 EN: $text\n🇪🇹 AM: $translated")
-                }
-                .addOnFailureListener {
-                    updateSubtitle("🇺🇸 EN: $text (ለመተርጎም አልተቻለም)")
-                }
-        } else {
-            amEnTranslator.translate(text)
-                .addOnSuccessListener { translated ->
-                    updateSubtitle("🇪🇹 AM: $text\n🇺🇸 EN: $translated")
-                }
-                .addOnFailureListener {
-                    updateSubtitle("🇪🇹 AM: $text (ለመተርጎም አልተቻለም)")
-                }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW)
+            manager.createNotificationChannel(channel)
         }
+
+        return Notification.Builder(this, channelId)
+            .setContentTitle("የጥሪ መተርገሚያ መስመር")
+            .setContentText("አፑ ከጀርባ ሆኖ ጥሪውን እያዳመጠ ነው...")
+            .setSmallIcon(android.R.drawable.ic_menu_mic)
+            .build()
     }
 
-    private fun updateSubtitle(text: String) {
-        textViewSubtitle?.text = text
-    }
-
-    private fun stopSpeechRecognition() {
-        speechRecognizer?.destroy()
-        speechRecognizer = null
-        updateSubtitle("📞 ጥሪው ተዘግቷል")
-    }
+    override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        super.onDestroy()
-        stopSpeechRecognition()
-        if (textViewSubtitle != null && windowManager != null) {
-            windowManager?.removeView(textViewSubtitle)
+        try {
+            speechRecognizer?.destroy()
+            if (overlayTextView != null) windowManager?.removeView(overlayTextView)
+            audioManager?.isSpeakerphoneOn = false
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
-        telephonyManager?.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE)
+        super.onDestroy()
     }
 }

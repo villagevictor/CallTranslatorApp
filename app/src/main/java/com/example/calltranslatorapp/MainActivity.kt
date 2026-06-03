@@ -7,18 +7,18 @@ import android.widget.TextView
 import android.view.Gravity
 import android.app.Activity
 import android.content.Intent
-import android.net.Uri
-import android.provider.Settings
 import android.content.pm.PackageManager
 import android.widget.Toast
 import android.Manifest
+import android.net.Uri
+import android.provider.Settings
 
 class MainActivity : Activity() {
 
     private lateinit var textView: TextView
     private lateinit var bgButton: Button
     private val PERMISSION_REQUEST_CODE = 200
-    private val OVERLAY_REQUEST_CODE = 300
+    private val OVERLAY_REQUEST_CODE = 1234
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,21 +30,19 @@ class MainActivity : Activity() {
         }
 
         textView = TextView(this).apply {
-            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n🔄 ሙሉ በሙሉ አውቶማቲክ ስሪት\n\n✅ የትርጉም ሞተር ዝግጁ ነው!"
-            textSize = 22f
+            text = "የጥሪ መተርገሚያ አፕሊኬሽን\n🔄 ባለሁለት አቅጣጫ (EN ↔️ AM)\n\n✅ የትርጉም ሞዴል ዝግጁ ነው!"
+            textSize = 20f
             gravity = Gravity.CENTER
         }
 
         bgButton = Button(this).apply {
-            text = "የበስተጀርባ የጥሪ መተርገሚያ አስጀምር"
+            text = "በጥሪ ጊዜ ከበስተጀርባ አስጀምር"
             setOnClickListener {
                 if (!Settings.canDrawOverlays(this@MainActivity)) {
-                    // ተንሳፋፊ ፈቃድ ከሌለ ወደ ሳምሰንግ ሲስተም ሴቲንግ መውሰድ
-                    val intent = Intent(
-                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:$packageName")
-                    )
+                    // የተንሳፋፊ መስኮት ፈቃድ ከሌለ ወደ ሳምሰንግ ሲስተም ሴቲንግ መውሰድ
+                    val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
                     startActivityForResult(intent, OVERLAY_REQUEST_CODE)
+                    Toast.makeText(this@MainActivity, "እባክዎ መጀመሪያ 'Allow permission' ያብሩ!", Toast.LENGTH_LONG).show()
                 } else {
                     startTranslationService()
                 }
@@ -62,7 +60,8 @@ class MainActivity : Activity() {
         try {
             val intent = Intent(this, CallTranslationService::class.java)
             startForegroundService(intent)
-            Toast.makeText(this, "🚀 አውቶማቲክ የጥሪ መከታተያ ተነስቷል!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "🚀 የጀርባ አሰማም እና ተንሳፋፊ መስኮት ተነስቷል!", Toast.LENGTH_LONG).show()
+            finish() // አፑን ዘግቶ ወደ ስልክ መደወያ ገጽ መመለስ
         } catch (e: Exception) {
             Toast.makeText(this, "ማስነሳት አልተቻለም፦ ${e.message}", Toast.LENGTH_LONG).show()
         }
@@ -92,7 +91,7 @@ class MainActivity : Activity() {
             if (Settings.canDrawOverlays(this)) {
                 startTranslationService()
             } else {
-                Toast.makeText(this, "❌ ተንሳፋፊ መስኮት ፈቃድ አልተሰጠም!", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "ተንሳፋፊ መስኮት ካልተፈቀደ አፑ በጥሪ ላይ መተርጎም አይችልም!", Toast.LENGTH_LONG).show()
             }
         }
     }
