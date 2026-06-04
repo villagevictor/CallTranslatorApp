@@ -35,7 +35,4 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'com.google.mlkit:translate:17.0.1'
-    
-    // 🚀 ከኢንተርኔት መፈለግ ቀርቶ በራሳችን libs ውስጥ ያለውን የ Vosk ፋይል በቀጥታ እንዲጭን አዘነዋል
-    implementation files('libs/vosk-android-0.3.32.aar')
 }

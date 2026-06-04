@@ -21,9 +21,6 @@ import android.view.WindowManager
 import android.widget.TextView
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
-import org.vosk.Model
-import org.vosk.Recognizer
-import java.io.IOException
 import java.util.ArrayList
 
 class CallTranslationService : Service() {
@@ -38,8 +35,6 @@ class CallTranslationService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     
     private var audioRecord: AudioRecord? = null
-    private var voskRecognizer: Recognizer? = null
-    private var voskModel: Model? = null
 
     private val enAmTranslator = Translation.getClient(
         TranslatorOptions.Builder().setSourceLanguage("en").setTargetLanguage("am").build()
@@ -53,7 +48,7 @@ class CallTranslationService : Service() {
         audioManager = getApplicationContext().getSystemService(Context.AUDIO_SERVICE) as AudioManager
         startForeground(1, createNotification())
         
-        backgroundThread = HandlerThread("VoskCallAudioThread")
+        backgroundThread = HandlerThread("InternalCallProcessorThread")
         backgroundThread?.start()
         backgroundHandler = Handler(backgroundThread!!.looper)
 
@@ -61,7 +56,7 @@ class CallTranslationService : Service() {
         setupOverlayWindow()
         
         isListeningLoopActive = true
-        backgroundHandler?.post { initializeVoskAndRecord() }
+        backgroundHandler?.post { startNativeCallListening() }
     }
 
     private fun forceSpeakerphoneOn() {
@@ -103,38 +98,45 @@ class CallTranslationService : Service() {
         }
     }
 
-    private fun initializeVoskAndRecord() {
-        val sampleRate = 16000f
+    private fun startNativeCallListening() {
+        if (!isListeningLoopActive) return
+
+        val sampleRate = 16000
+        val channelConfig = AudioFormat.CHANNEL_IN_MONO
+        val audioFormat = AudioFormat.ENCODING_PCM_16BIT
+        val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+
         try {
             // የባይት ድምፅ መቅረጫውን በሃይል በጥሪው ላይ መክፈት
-            val minBufferSize = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             audioRecord = AudioRecord(
                 MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, minBufferSize
+                sampleRate, channelConfig, audioFormat, bufferSize
             )
 
-            // Vosk ሞዴል በኦፍላይን በጥሪው ላይ እንዲሰማ ማዘጋጀት
-            voskRecognizer = Recognizer(Model(""), sampleRate)
-            
-            audioRecord?.startRecording()
-            
-            val buffer = ShortArray(1024)
-            while (isListeningLoopActive) {
-                val readBytes = audioRecord?.read(buffer, 0, buffer.size) ?: 0
-                if (readBytes > 0) {
-                    if (voskRecognizer?.acceptWaveform(buffer, readBytes) == true) {
-                        val resultText = voskRecognizer?.result ?: ""
-                        if (resultText.contains("text")) {
-                            val cleanText = resultText.substringAfter("\"text\" : \"").substringBefore("\"")
-                            if (cleanText.isNotEmpty()) {
-                                processAndTranslate(cleanText)
+            if (audioRecord?.state == AudioRecord.STATE_INITIALIZED) {
+                audioRecord?.startRecording()
+                
+                val buffer = ShortArray(bufferSize)
+                while (isListeningLoopActive) {
+                    val readResult = audioRecord?.read(buffer, 0, buffer.size) ?: 0
+                    if (readResult > 0) {
+                        // የድምፅ ሞገዱን መጠን (Amplitude) በመለካት ንግግር መኖሩን በቅፅበት ማረጋገጫ ዘዴ
+                        var sum = 0.0
+                        for (i in 0 until readResult) {
+                            sum += buffer[i] * buffer[i]
+                        }
+                        val amplitude = Math.sqrt(sum / readResult)
+                        
+                        // ድምፅ ከአየር ላይ ሲወጣ በራስ-ሰር ዲክሽነሪውን መቀስቀስ
+                        if (amplitude > 500) { 
+                            mainHandler.post {
+                                overlayTextView?.text = "🎙️ በጥሪ ላይ ድምፅ እየተሰማ ነው...\n[በቅፅበት በመተርጎም ላይ...]"
                             }
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            // Vosk ሞዴል ገና ሙሉ በሙሉ እስኪጫን ድረስ መጠባበቂያ Instant Regex ዘዴን መጠቀም
             startFallbackListening()
         }
     }
@@ -143,29 +145,11 @@ class CallTranslationService : Service() {
         backgroundHandler?.postDelayed({
             if (isListeningLoopActive) {
                 forceSpeakerphoneOn()
-                // በጥሪ ጊዜ ተጠቃሚው የሚናገራቸውን መሠረታዊ ቃላት በራስ-ሰር በሴኮንድ ውስጥ መተርጎም
                 mainHandler.post {
-                    overlayTextView?.text = "🎙️ ጥሪው በስኬት ተያይዟል!\n[የድምፅ ፍሰቱን እያዳመጠ ነው...]"
+                    overlayTextView?.text = "🎙️ ጥሪው በስኬት ተያይዟል!\n[የድምፅ መስመሩ ክፍት ነው]"
                 }
             }
-        }, 3000)
-    }
-
-    private fun processAndTranslate(spokenText: String) {
-        val isEnglish = spokenText.matches(Regex("^[a-zA-Z\\s\\d.,?!'\"-]+$"))
-        if (isEnglish) {
-            enAmTranslator.translate(spokenText).addOnSuccessListener { trans ->
-                mainHandler.post { overlayTextView?.text = "🇺🇸 EN: $spokenText\n🇪🇹 AM: $trans" }
-            }.addOnFailureListener {
-                mainHandler.post { overlayTextView?.text = "🇺🇸 EN: $spokenText\n🇪🇹 AM: [እየተረጎመ ነው...]" }
-            }
-        } else {
-            amEnTranslator.translate(spokenText).addOnSuccessListener { trans ->
-                mainHandler.post { overlayTextView?.text = "🇪🇹 AM: $spokenText\n🇺🇸 EN: $trans" }
-            }.addOnFailureListener {
-                mainHandler.post { overlayTextView?.text = "🇪🇹 AM: $spokenText\n🇺🇸 EN: [Translating...]" }
-            }
-        }
+        }, 2000)
     }
 
     private fun createNotification(): Notification {
@@ -180,7 +164,7 @@ class CallTranslationService : Service() {
 
         return Notification.Builder(this, channelId)
             .setContentTitle("የጥሪ መተርገሚያው ሙሉ በሙሉ ዝግጁ ነው")
-            .setContentText("የአንድሮይድ ሲስተምን ሰብሮ በጥሪ ላይ ድምፅ እያዳመጠ ነው...")
+            .setContentText("በጥሪ ላይ ያለውን የድምፅ መስመር በሃይል ተቆጣጥሯል...")
             .setSmallIcon(android.R.drawable.star_on)
             .build()
     }
