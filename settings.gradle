@@ -1,0 +1,18 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        // 🚀 የ Vosk ላይብረሪ የሚገኝበት ዋናው ማከማቻ አድራሻ
+        maven { url "https://alphacephei.com/maven2/" }
+    }
+}
+rootProject.name = "CallTranslatorApp"
+include ':app'
