@@ -9,7 +9,10 @@ import android.content.Intent
 import android.graphics.PixelFormat
 import android.media.AudioManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -28,6 +31,11 @@ class CallTranslationService : Service() {
     private var overlayTextView: TextView? = null
     private var audioManager: AudioManager? = null
     private var isListeningLoopActive = false
+    
+    // ስልኩ እንዳይደንዝዝ በጀርባ የሚሰሩ አዳዲስ ረዳቶች (Background Threads)
+    private var backgroundThread: HandlerThread? = null
+    private var backgroundHandler: Handler? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var recognitionIntent: Intent
 
     private val enAmTranslator = Translation.getClient(
@@ -42,8 +50,10 @@ class CallTranslationService : Service() {
         audioManager = getApplicationContext().getSystemService(Context.AUDIO_SERVICE) as AudioManager
         startForeground(1, createNotification())
         
-        enAmTranslator.downloadModelIfNeeded()
-        amEnTranslator.downloadModelIfNeeded()
+        // የጀርባ ክርን እዚህ ላይ እንቀሰቅሳለን (ስልኩ እንዳይደንዝዝ)
+        backgroundThread = HandlerThread("VoiceRecognitionThread")
+        backgroundThread?.start()
+        backgroundHandler = Handler(backgroundThread!!.looper)
 
         try {
             audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
@@ -55,7 +65,7 @@ class CallTranslationService : Service() {
         setupOverlayWindow()
         
         isListeningLoopActive = true
-        startContinuousListening()
+        backgroundHandler?.post { startContinuousListening() }
     }
 
     private fun setupOverlayWindow() {
@@ -91,9 +101,13 @@ class CallTranslationService : Service() {
     private fun startContinuousListening() {
         if (!isListeningLoopActive) return
 
-        speechRecognizer?.destroy()
-        
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+        // አሮጌው ካለ በሰላም ማጽዳት
+        mainHandler.post {
+            try {
+                speechRecognizer?.destroy()
+            } catch (e: Exception) {}
+        }
+
         recognitionIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "am-ET")
@@ -102,50 +116,59 @@ class CallTranslationService : Service() {
             putExtra("android.speech.extra.DICTATION_MODE", true)
         }
 
-        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {
-                audioManager?.isSpeakerphoneOn = true
-            }
-            override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rmsd: Float) {}
-            override fun onBufferReceived(buffer: ByteArray?) {}
-            
-            override fun onEndOfSpeech() {
-                restartListening()
-            }
-
-            override fun onError(error: Int) {
-                overlayTextView?.postDelayed({ restartListening() }, 1000)
-            }
-
-            override fun onResults(results: Bundle?) {
-                processVoiceResults(results)
-                restartListening()
-            }
-
-            override fun onPartialResults(partialResults: Bundle?) {
-                val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                if (!matches.isNullOrEmpty()) {
-                    overlayTextView?.text = "🎙️ እየተሰማ ነው፦ ${matches[0]}"
+        // SpeechRecognizer መፈጠር ያለበት በ Main Looper ላይ ቢሆንም ስራው በጀርባ ነው
+        mainHandler.post {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this@CallTranslationService)
+            speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {
+                    try { audioManager?.isSpeakerphoneOn = true } catch (e: Exception) {}
                 }
-            }
-            
-            override fun onEvent(eventType: Int, params: Bundle?) {}
-        })
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsd: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                
+                override fun onEndOfSpeech() {
+                    backgroundHandler?.post { restartListening() }
+                }
 
-        try {
-            speechRecognizer?.startListening(recognitionIntent)
-        } catch (e: Exception) {
-            e.printStackTrace()
+                override fun onError(error: Int) {
+                    // ስህተት ቢፈጠር ስልኩ እንዳይጨናነቅ በየ 3 ሴኮንድ (3000ms) ልዩነት ብቻ በእርጋታ ይቀሰቅሰዋል
+                    backgroundHandler?.removeCallbacksAndMessages(null)
+                    backgroundHandler?.postDelayed({ restartListening() }, 3000)
+                }
+
+                override fun onResults(results: Bundle?) {
+                    backgroundHandler?.post { processVoiceResults(results) }
+                    backgroundHandler?.post { restartListening() }
+                }
+
+                override fun onPartialResults(partialResults: Bundle?) {
+                    val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    if (!matches.isNullOrEmpty()) {
+                        mainHandler.post {
+                            overlayTextView?.text = "🎙️ እየተሰማ ነው፦ ${matches[0]}"
+                        }
+                    }
+                }
+                
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+
+            try {
+                speechRecognizer?.startListening(recognitionIntent)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
     private fun restartListening() {
-        if (isListeningLoopActive) {
+        if (!isListeningLoopActive) return
+        mainHandler.post {
             try {
                 speechRecognizer?.startListening(recognitionIntent)
             } catch (e: Exception) {
-                startContinuousListening()
+                backgroundHandler?.post { startContinuousListening() }
             }
         }
     }
@@ -159,20 +182,19 @@ class CallTranslationService : Service() {
             
             if (isEnglish) {
                 enAmTranslator.translate(spokenText).addOnSuccessListener { trans ->
-                    overlayTextView?.text = "🇺🇸 EN: $spokenText\n🇪🇹 AM: $trans"
+                    mainHandler.post { overlayTextView?.text = "🇺🇸 EN: $spokenText\n🇪🇹 AM: $trans" }
                 }.addOnFailureListener {
                     val amFallback = when {
                         spokenText.contains("hello", true) -> "ሰላም"
                         spokenText.contains("how are you", true) -> "እንደምን ነህ?"
-                        spokenText.contains("morning", true) -> "እንደምን አደርክ"
                         spokenText.contains("fine", true) -> "ደህና ነኝ"
                         else -> "$spokenText"
                     }
-                    overlayTextView?.text = "🇺🇸 EN: $spokenText\n🇪🇹 AM: $amFallback"
+                    mainHandler.post { overlayTextView?.text = "🇺🇸 EN: $spokenText\n🇪🇹 AM: $amFallback" }
                 }
             } else {
                 amEnTranslator.translate(spokenText).addOnSuccessListener { trans ->
-                    overlayTextView?.text = "🇪🇹 AM: $spokenText\n🇺🇸 EN: $trans"
+                    mainHandler.post { overlayTextView?.text = "🇪🇹 AM: $spokenText\n🇺🇸 EN: $trans" }
                 }.addOnFailureListener {
                     val enFallback = when {
                         spokenText.contains("ሰላም", true) -> "Hello"
@@ -180,7 +202,7 @@ class CallTranslationService : Service() {
                         spokenText.contains("ደህና ነኝ", true) -> "I am fine"
                         else -> "$spokenText"
                     }
-                    overlayTextView?.text = "🇪🇹 AM: $spokenText\n🇺🇸 EN: $enFallback"
+                    mainHandler.post { overlayTextView?.text = "🇪🇹 AM: $spokenText\n🇺🇸 EN: $enFallback" }
                 }
             }
         }
@@ -198,7 +220,7 @@ class CallTranslationService : Service() {
 
         return Notification.Builder(this, channelId)
             .setContentTitle("የጥሪ መተርገሚያ መስመር")
-            .setContentText("አፑ ከጀርባ ሆኖ ጥሪውን በጥልቀት እያዳመጠ ነው...")
+            .setContentText("አፑ ከጀርባ ሆኖ ስልኩን ሳይጭን በእርጋታ እያዳመጠ ነው...")
             .setSmallIcon(android.R.drawable.star_on)
             .build()
     }
@@ -207,12 +229,17 @@ class CallTranslationService : Service() {
 
     override fun onDestroy() {
         isListeningLoopActive = false
-        try {
-            speechRecognizer?.destroy()
-            if (overlayTextView != null) windowManager?.removeView(overlayTextView)
-            audioManager?.isSpeakerphoneOn = false
-        } catch (e: Exception) {
-            e.printStackTrace()
+        backgroundHandler?.removeCallbacksAndMessages(null)
+        backgroundThread?.quitSafely()
+        
+        mainHandler.post {
+            try {
+                speechRecognizer?.destroy()
+                if (overlayTextView != null) windowManager?.removeView(overlayTextView)
+                audioManager?.isSpeakerphoneOn = false
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
         super.onDestroy()
     }
