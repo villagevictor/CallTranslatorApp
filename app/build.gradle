@@ -36,6 +36,6 @@ dependencies {
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'com.google.mlkit:translate:17.0.1'
     
-    // 🚀 የስሪት ቁጥሩን ወደ ትክክለኛው እና ወደሚገኘው 0.3.32 አስተካክለነዋል
-    implementation 'alphacephei:vosk-android:0.3.32'
+    // 🚀 ይፋዊውን እና ትክክለኛውን የ Vosk ስም (org.alphacephei) አስተካክለነዋል
+    implementation 'org.alphacephei:vosk-android:0.3.32'
 }
