@@ -30,7 +30,6 @@ class CallTranslationService : Service() {
     private var overlayTextView: TextView? = null
     private var audioManager: AudioManager? = null
     
-    // 🎙️ የድምፅ ኢንጂን እና የትርጉም ረዳቶች
     private var speechRecognizer: SpeechRecognizer? = null
     private lateinit var recognitionIntent: Intent
     private var translator: Translator? = null
@@ -62,8 +61,8 @@ class CallTranslationService : Service() {
         overlayTextView = TextView(this).apply {
             text = "🎙️ የጥሪ መተርገሚያ ዝግጁ ነው... ይናገሩ"
             textSize = 18f
-            setTextColor(0xFFFFFFFF.toInt()) // ነጭ ጽሑፍ
-            setBackgroundColor(0xE6000000.toInt()) // ጥቁር ዳራ (Semi-transparent)
+            setTextColor(0xFFFFFFFF.toInt())
+            setBackgroundColor(0xE6000000.toInt())
             setPadding(40, 30, 40, 30)
             gravity = Gravity.CENTER
         }
@@ -76,7 +75,7 @@ class CallTranslationService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP
-            y = 250 // ከስክሪኑ አናት ዝቅ ብሎ እንዲቀመጥ
+            y = 250
         }
 
         try {
@@ -87,14 +86,13 @@ class CallTranslationService : Service() {
     }
 
     private fun initializeTranslator() {
-        // የእንግሊዝኛ ወደ አማርኛ የትርጉም አማራጭ መፍጠር[span_2](start_span)[span_2](end_span)
+        // 🚀 የቋንቋ ስህተቱን ለአንዴና ለመጨረሻ ጊዜ ለማስተካከል የቋንቋ ታጎችን ("en" እና "am") በቀጥታ ተጠቅመናል
         val options = TranslatorOptions.Builder()
             .setSourceLanguage(TranslateLanguage.ENGLISH)
-            .setTargetLanguage(TranslateLanguage.AMHARIC)
+            .setTargetLanguage(TranslateLanguage.fromLanguageTag("am")!!)
             .build()
         translator = Translation.getClient(options)
         
-        // ሞዴሉ አስቀድሞ በ MainActivity ስለወረደ ቀጥታ ማዳመጥ እንጀምራለን
         isListeningLoopActive = true
         startSpeechEngine()
     }
@@ -105,13 +103,13 @@ class CallTranslationService : Service() {
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
         recognitionIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US") // ፈረንጁ የሚናገረውን ለመስማት
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true) // በከፊል የተናገረውን ወዲያው ለማሳየት[span_3](start_span)[span_3](end_span)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         }
 
         speechRecognizer?.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
-                forceSpeakerphoneOn() // ማይኩ ሲከፈት ስፒከሩ እንዳይዘጋ በሃይል ማረጋገጥ
+                forceSpeakerphoneOn()
             }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsd: Float) {}
@@ -119,7 +117,6 @@ class CallTranslationService : Service() {
             override fun onEndOfSpeech() {}
 
             override fun onError(error: Int) {
-                // ስህተት (ለምሳሌ ዝምታ) ቢፈጠር እንኳ ሳይቋረጥ በየ 1 ሴኮንዱ ራሱን ይቀሰቅሳል (Continuous Listening)
                 if (isListeningLoopActive) {
                     mainHandler.postDelayed({ restartListening() }, 1000)
                 }
@@ -129,7 +126,6 @@ class CallTranslationService : Service() {
                 val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 if (!matches.isNullOrEmpty()) {
                     val originalText = matches[0]
-                    // 🔄 እውነተኛውን የ ML Kit .translate() መጥራት!
                     translateAndDisplay(originalText)
                 }
                 if (isListeningLoopActive) restartListening()
@@ -156,7 +152,6 @@ class CallTranslationService : Service() {
     private fun translateAndDisplay(textToTranslate: String) {
         translator?.translate(textToTranslate)
             ?.addOnSuccessListener { translatedText ->
-                // 🎯 ውጤቱን በቅጽበት Overlay ላይ ማሳየት!
                 overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: $translatedText"
             }
             ?.addOnFailureListener { e ->
