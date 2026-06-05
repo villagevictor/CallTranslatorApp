@@ -18,6 +18,10 @@ import android.speech.SpeechRecognizer
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.TextView
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.Translator
+import com.google.mlkit.nl.translate.TranslatorOptions
 import java.util.ArrayList
 
 class CallTranslationService : Service() {
@@ -26,23 +30,21 @@ class CallTranslationService : Service() {
     private var overlayTextView: TextView? = null
     private var audioManager: AudioManager? = null
     
-    // 🎙️ Phase 1፦ የድምፅ ኢንጂን ረዳቶች
+    // 🎙️ የድምፅ ኢንጂን እና የትርጉም ረዳቶች
     private var speechRecognizer: SpeechRecognizer? = null
     private lateinit var recognitionIntent: Intent
+    private var translator: Translator? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isListeningLoopActive = false
 
     override fun onCreate() {
         super.onCreate()
-        audioManager = getApplicationContext().getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         startForeground(1, createNotification())
         
         forceSpeakerphoneOn()
         setupOverlayWindow()
-        
-        isListeningLoopActive = true
-        // የድምፅ ኢንጂኑን በዋናው መስመር ላይ ማስነሳት
-        startSpeechEngine()
+        initializeTranslator()
     }
 
     private fun forceSpeakerphoneOn() {
@@ -58,10 +60,10 @@ class CallTranslationService : Service() {
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         
         overlayTextView = TextView(this).apply {
-            text = "🎙️ የድምፅ ኢንጂን በመነሳት ላይ... ይናገሩ"
+            text = "🎙️ የጥሪ መተርገሚያ ዝግጁ ነው... ይናገሩ"
             textSize = 18f
-            setTextColor(0xFFFFFFFF.toInt())
-            setBackgroundColor(0xE6000000.toInt())
+            setTextColor(0xFFFFFFFF.toInt()) // ነጭ ጽሑፍ
+            setBackgroundColor(0xE6000000.toInt()) // ጥቁር ዳራ (Semi-transparent)
             setPadding(40, 30, 40, 30)
             gravity = Gravity.CENTER
         }
@@ -74,7 +76,7 @@ class CallTranslationService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP
-            y = 250
+            y = 250 // ከስክሪኑ አናት ዝቅ ብሎ እንዲቀመጥ
         }
 
         try {
@@ -84,20 +86,32 @@ class CallTranslationService : Service() {
         }
     }
 
+    private fun initializeTranslator() {
+        // የእንግሊዝኛ ወደ አማርኛ የትርጉም አማራጭ መፍጠር[span_2](start_span)[span_2](end_span)
+        val options = TranslatorOptions.Builder()
+            .setSourceLanguage(TranslateLanguage.ENGLISH)
+            .setTargetLanguage(TranslateLanguage.AMHARIC)
+            .build()
+        translator = Translation.getClient(options)
+        
+        // ሞዴሉ አስቀድሞ በ MainActivity ስለወረደ ቀጥታ ማዳመጥ እንጀምራለን
+        isListeningLoopActive = true
+        startSpeechEngine()
+    }
+
     private fun startSpeechEngine() {
         if (!isListeningLoopActive) return
 
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
         recognitionIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US") // ለመጀመርያ ፍተሻ በእንግሊዝኛ አድርገነዋል
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra("android.speech.extra.DICTATION_MODE", true)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US") // ፈረንጁ የሚናገረውን ለመስማት
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true) // በከፊል የተናገረውን ወዲያው ለማሳየት[span_3](start_span)[span_3](end_span)
         }
 
         speechRecognizer?.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
-                forceSpeakerphoneOn()
+                forceSpeakerphoneOn() // ማይኩ ሲከፈት ስፒከሩ እንዳይዘጋ በሃይል ማረጋገጥ
             }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsd: Float) {}
@@ -105,7 +119,7 @@ class CallTranslationService : Service() {
             override fun onEndOfSpeech() {}
 
             override fun onError(error: Int) {
-                // ስህተት ቢመጣ እንኳ ድምፅ ማዳመጡን ሳያቋርጥ በየ 1 ሴኮንዱ ራሱን ይቀሰቅሳል (Continuous Listening)
+                // ስህተት (ለምሳሌ ዝምታ) ቢፈጠር እንኳ ሳይቋረጥ በየ 1 ሴኮንዱ ራሱን ይቀሰቅሳል (Continuous Listening)
                 if (isListeningLoopActive) {
                     mainHandler.postDelayed({ restartListening() }, 1000)
                 }
@@ -114,8 +128,9 @@ class CallTranslationService : Service() {
             override fun onResults(results: Bundle?) {
                 val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 if (!matches.isNullOrEmpty()) {
-                    val heardText = matches[0]
-                    overlayTextView?.text = "HEARD: $heardText"
+                    val originalText = matches[0]
+                    // 🔄 እውነተኛውን የ ML Kit .translate() መጥራት!
+                    translateAndDisplay(originalText)
                 }
                 if (isListeningLoopActive) restartListening()
             }
@@ -124,7 +139,7 @@ class CallTranslationService : Service() {
                 val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 if (!matches.isNullOrEmpty()) {
                     val partialText = matches[0]
-                    overlayTextView?.text = "HEARD (💡 እየተናገሩ ነው...)፦\n$partialText"
+                    overlayTextView?.text = "HEARD: $partialText\n⏳ በመተርጎም ላይ..."
                 }
             }
 
@@ -138,6 +153,17 @@ class CallTranslationService : Service() {
         }
     }
 
+    private fun translateAndDisplay(textToTranslate: String) {
+        translator?.translate(textToTranslate)
+            ?.addOnSuccessListener { translatedText ->
+                // 🎯 ውጤቱን በቅጽበት Overlay ላይ ማሳየት!
+                overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: $translatedText"
+            }
+            ?.addOnFailureListener { e ->
+                overlayTextView?.text = "HEARD: $textToTranslate\n❌ የትርጉም ስህተት: ${e.message}"
+            }
+    }
+
     private fun restartListening() {
         if (!isListeningLoopActive) return
         try {
@@ -149,8 +175,8 @@ class CallTranslationService : Service() {
     }
 
     private fun createNotification(): Notification {
-        val channelId = "call_translator_channel"
-        val channelName = "Call Translation Running"
+        val channelId = "call_translator_pipeline"
+        val channelName = "Real-Time Call Translation Engine"
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -159,9 +185,9 @@ class CallTranslationService : Service() {
         }
 
         return Notification.Builder(this, channelId)
-            .setContentTitle("Phase 1: የድምፅ ፍተሻ መስመር")
-            .setContentText("ድምፅን ወደ ጽሑፍ ለመቀየር እያዳመጠ ነው...")
-            .setSmallIcon(android.R.drawable.star_on)
+            .setContentTitle("እውነተኛ የጥሪ ትርጉም መስመር")
+            .setContentText("የድምፅ ኢንጂን እና የትርጉም ማሽኑ በንቃት እየሰሩ ነው...")
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
     }
 
@@ -171,6 +197,7 @@ class CallTranslationService : Service() {
         isListeningLoopActive = false
         try {
             speechRecognizer?.destroy()
+            translator?.close()
             if (overlayTextView != null) windowManager?.removeView(overlayTextView)
         } catch (e: Exception) {}
         super.onDestroy()
