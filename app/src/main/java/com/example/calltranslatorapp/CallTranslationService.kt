@@ -91,19 +91,19 @@ class CallTranslationService : Service() {
 
     private fun initializeTranslator() {
         try {
-            // 🚀 ለአማርኛ ቋንቋ ፍጹም ትክክለኛውን የ ML Kit መለያ መንገድ እንጠቀም
+            // 🎯 የጉግልን ኦፊሴላዊ የአማርኛ መለያ (TranslateLanguage.AMHARIC) በዚህ መንገድ እንጠራዋለን
             val options = TranslatorOptions.Builder()
                 .setSourceLanguage(TranslateLanguage.ENGLISH)
-                .setTargetLanguage("am")
+                .setTargetLanguage(TranslateLanguage.AMHARIC)
                 .build()
             translator = Translation.getClient(options)
             
             isListeningLoopActive = true
             startSpeechEngine()
         } catch (e: Exception) {
-            overlayTextView?.text = "❌ ሲስተሙን መክፈት አልተቻለም፦ ${e.message}"
+            overlayTextView?.text = "❌ ስህተት፦ ${e.message}"
             isListeningLoopActive = true
-            startSpeechEngine() // ትርጉሙ ባይነሳ እንኳ የድምፅ ማዳመጫው እንዲሠራ
+            startSpeechEngine()
         }
     }
 
@@ -167,20 +167,21 @@ class CallTranslationService : Service() {
 
     private fun translateAndDisplay(textToTranslate: String) {
         if (translator == null) {
-            overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n[⚠️ የትርጉም ማሽን አልተጫነም]"
+            overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n[⚠️ የትርጉም ማሽን አልተነሳም]"
             return
         }
 
         try {
             translator?.translate(textToTranslate)
                 ?.addOnSuccessListener { translatedText ->
+                    // 🎉 ስኬት! የተተረጎመውን ጽሑፍ በቅጽበት ማሳየት
                     overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: $translatedText"
                 }
                 ?.addOnFailureListener { e ->
-                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n[ትርጉም አልተሳካም]"
+                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n❌ የትርጉም ስህተት፦ ${e.message}"
                 }
         } catch (e: Exception) {
-            overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n[የውስጥ ስህተት]"
+            overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n[የውስጥ ሲስተም ስህተት]"
         }
     }
 
