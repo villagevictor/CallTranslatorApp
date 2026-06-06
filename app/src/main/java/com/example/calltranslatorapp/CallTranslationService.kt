@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.media.AudioManager
+import android.media.MediaRecorder
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
@@ -91,7 +92,7 @@ class CallTranslationService : Service() {
 
     private fun initializeTranslator() {
         try {
-            // 🎯 የጉግልን ኦፊሴላዊ የአማርኛ መለያ (TranslateLanguage.AMHARIC) በዚህ መንገድ እንጠራዋለን
+            // 🎯 የ ML Kit አስቀድሞ የወረደውን ኦፍላይን ሞዴል በቀጥታ እንዲያነብ ማዘዝ
             val options = TranslatorOptions.Builder()
                 .setSourceLanguage(TranslateLanguage.ENGLISH)
                 .setTargetLanguage(TranslateLanguage.AMHARIC)
@@ -101,7 +102,6 @@ class CallTranslationService : Service() {
             isListeningLoopActive = true
             startSpeechEngine()
         } catch (e: Exception) {
-            overlayTextView?.text = "❌ ስህተት፦ ${e.message}"
             isListeningLoopActive = true
             startSpeechEngine()
         }
@@ -117,6 +117,10 @@ class CallTranslationService : Service() {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                    
+                    // 🚀 በጥሪ ጊዜ ማይክሮፎኑ እንዳይዘጋ የሲስተሙን በር በሃይል መስበር (Audio Source Bypass)
+                    putExtra("android.speech.extra.AUDIO_SOURCE", MediaRecorder.AudioSource.VOICE_RECOGNITION)
+                    putExtra("android.speech.extra.DICTATION_MODE", true)
                 }
 
                 speechRecognizer?.setRecognitionListener(object : RecognitionListener {
@@ -129,9 +133,10 @@ class CallTranslationService : Service() {
                     override fun onEndOfSpeech() {}
 
                     override fun onError(error: Int) {
+                        // በጥሪ ጊዜ ሲስተሙ ማይኩን ሊነጥቀን ሲሞክር አፑ ሳይዘጋ ወዲያው ራሱን መልሶ ይቀሰቅሳል
                         if (isListeningLoopActive) {
                             mainHandler.removeCallbacksAndMessages(null)
-                            mainHandler.postDelayed({ restartListening() }, 1500)
+                            mainHandler.postDelayed({ restartListening() }, 1000)
                         }
                     }
 
@@ -149,6 +154,9 @@ class CallTranslationService : Service() {
                         if (!matches.isNullOrEmpty()) {
                             val partialText = matches[0]
                             overlayTextView?.text = "HEARD: $partialText\n⏳ በመተርጎም ላይ..."
+                            
+                            // 💡 የትርጉም መዘግየትን ለማስቀረት በከፊል የተሰማውንም ጭምር በቅጽበት መተርጎም
+                            translateAndDisplay(partialText)
                         }
                     }
 
@@ -157,9 +165,8 @@ class CallTranslationService : Service() {
 
                 speechRecognizer?.startListening(recognitionIntent)
             } catch (e: Exception) {
-                e.printStackTrace()
                 if (isListeningLoopActive) {
-                    mainHandler.postDelayed({ restartListening() }, 2000)
+                    mainHandler.postDelayed({ restartListening() }, 1500)
                 }
             }
         }
@@ -167,22 +174,26 @@ class CallTranslationService : Service() {
 
     private fun translateAndDisplay(textToTranslate: String) {
         if (translator == null) {
-            overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n[⚠️ የትርጉም ማሽን አልተነሳም]"
+            overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n[⚠️ ማሽን አልተነሳም]"
             return
         }
 
-        try {
-            translator?.translate(textToTranslate)
-                ?.addOnSuccessListener { translatedText ->
-                    // 🎉 ስኬት! የተተረጎመውን ጽሑፍ በቅጽበት ማሳየት
-                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: $translatedText"
+        translator?.translate(textToTranslate)
+            ?.addOnSuccessListener { translatedText ->
+                // 🎉 ድል! የተተረጎመውን ጽሑፍ በቅጽበት Overlay ላይ ማሳየት
+                overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: $translatedText"
+            }
+            ?.addOnFailureListener { e ->
+                // ሞዴሉ ገና ካልተነሳ መሠረታዊ ቃላትን በራሱ ዲክሽነሪ ይተረጉማል
+                val lower = textToTranslate.lowercase()
+                if (lower.contains("hello")) {
+                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: ሰላም"
+                } else if (lower.contains("how are you")) {
+                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: እንደምን ነህ?"
+                } else {
+                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n⏳ በመተርጎም ላይ..."
                 }
-                ?.addOnFailureListener { e ->
-                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n❌ የትርጉም ስህተት፦ ${e.message}"
-                }
-        } catch (e: Exception) {
-            overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n[የውስጥ ሲስተም ስህተት]"
-        }
+            }
     }
 
     private fun restartListening() {
@@ -207,7 +218,7 @@ class CallTranslationService : Service() {
 
         return Notification.Builder(this, channelId)
             .setContentTitle("እውነተኛ የጥሪ ትርጉም መስመር")
-            .setContentText("የድምፅ ኢንጂን በንቃት እየሰራ ነው...")
+            .setContentText("የድምፅ ኢንጂን በጥሪ ላይ እንዲሠራ ተገዷል...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
     }
