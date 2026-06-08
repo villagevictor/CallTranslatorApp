@@ -8,8 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.media.AudioManager
-import android.media.MediaRecorder
-import android.media.audiofx.AcousticEchoCanceler
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
@@ -39,9 +37,8 @@ class CallTranslationService : Service() {
             audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             startForeground(1, createNotification())
             
-            // 🚀 የድምፅ ሁነታውን ወደ መደበኛ የጥሪ መስመር ማስተካከል። ይህ የሚጮኸውን ድምፅ ይከላከላል
-            audioManager?.mode = AudioManager.MODE_IN_CALL
-            audioManager?.isSpeakerphoneOn = true
+            // 🚀 መደበኛውን የድምፅ ሁነታ በመጠቀም ያንን ጆሮ የሚበሳውን ጩኸት ማስቀረት
+            audioManager?.mode = AudioManager.MODE_NORMAL
             
             setupOverlayWindow()
             isListeningLoopActive = true
@@ -91,19 +88,10 @@ class CallTranslationService : Service() {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    
-                    // 🚀 የድምፅ ጩኸት ማጣሪያ (Echo Canceler) ያላቸውን የስርዓት ማይኮች መምረጥ
-                    putExtra("android.speech.extra.AUDIO_SOURCE", MediaRecorder.AudioSource.VOICE_COMMUNICATION)
-                    putExtra("android.speech.extra.DICTATION_MODE", true)
                 }
 
                 speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: Bundle?) {
-                        // በጥሪ ጊዜ ስፒከሩ በራሱ እንዳይጠፋ በየሴኮንዱ ማረጋገጥ
-                        try {
-                            audioManager?.isSpeakerphoneOn = true
-                        } catch (e: Exception) {}
-                    }
+                    override fun onReadyForSpeech(params: Bundle?) {}
                     override fun onBeginningOfSpeech() {}
                     override fun onRmsChanged(rmsd: Float) {}
                     override fun onBufferReceived(buffer: ByteArray?) {}
@@ -148,7 +136,7 @@ class CallTranslationService : Service() {
     private fun translateAndDisplay(textToTranslate: String) {
         val lower = textToTranslate.lowercase()
         
-        // ኦፍላይን ዲክሽነሪ መዝገብ
+        // 🎯 በቅጽበት የሚሰሩ ኦፍላይን የትርጉም መዝገቦች
         if (lower.contains("hello")) {
             overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: ሰላም"
         } else if (lower.contains("how are you")) {
@@ -186,7 +174,7 @@ class CallTranslationService : Service() {
 
         return Notification.Builder(this, channelId)
             .setContentTitle("እውነተኛ የጥሪ ትርጉም መስመር")
-            .setContentText("የድምፅ ጩኸት መከላከያ በስፒከር ላይ ገብቷል...")
+            .setContentText("ቀላልና ንጹህ የድምፅ ኢንጂን በስራ ላይ ነው...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
     }
