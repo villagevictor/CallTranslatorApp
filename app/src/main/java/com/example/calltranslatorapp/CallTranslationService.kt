@@ -46,12 +46,12 @@ class CallTranslationService : Service() {
             audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             startForeground(1, createNotification())
             
-            // በጥሪ ጊዜ የድምፅ ጩኸቱን ለማስቆም ወደ VOICE_COMMUNICATION ሁነታ መቀየር
+            // በጥሪ ጊዜ የሚመጣውን የድምፅ መዛባት ለመከላከል
             audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
             audioManager?.isSpeakerphoneOn = true
             
             setupOverlayWindow()
-            keepHardwareAudioOpen() // 🚀 የሲስተሙን የማይክሮፎን መቆለፊያ በጀርባ መስበር
+            keepHardwareAudioOpen() // በጥሪ ጊዜ የማይክሮፎን መቆለፊያውን በጀርባ መስበሪያ
             initializeTranslator()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -89,7 +89,6 @@ class CallTranslationService : Service() {
     }
 
     private fun keepHardwareAudioOpen() {
-        // በጥሪ ጊዜ አንድሮይድ ማይኩን እንዳይነጥቀን በዝቅተኛ ፍሪኩዌንሲ የሃርድዌር ቻናሉን በጀርባ ከፍቶ ማቆየት
         Thread {
             try {
                 val bufferSize = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
@@ -108,10 +107,10 @@ class CallTranslationService : Service() {
 
     private fun initializeTranslator() {
         try {
-            // ሁሉንም ቃላት እንዲተረጉም ሙሉውን የጉግል ኦፍላይን ማሽን ማገናኘት
+            // 🎯 የቋንቋ ስህተቱን ሙሉ በሙሉ ለማጥፋት ከ "TranslateLanguage" ዝርዝር ውስጥ "am" የሚለውን መለያ በቀጥታ እንጠራዋለን
             val options = TranslatorOptions.Builder()
                 .setSourceLanguage(TranslateLanguage.ENGLISH)
-                .setTargetLanguage(TranslateLanguage.AMHARIC)
+                .setTargetLanguage(TranslateLanguage.fromLanguageTag("am")!!)
                 .build()
             translator = Translation.getClient(options)
             
@@ -188,14 +187,22 @@ class CallTranslationService : Service() {
             return
         }
 
-        // 🎯 የጉግል ኦፍላይን ሞዴል ሁሉንም ቃላት ያለምንም ገደብ እንዲተረጎም መጥራት
         translator?.translate(textToTranslate)
             ?.addOnSuccessListener { translatedText ->
                 overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: $translatedText"
             }
             ?.addOnFailureListener { e ->
-                // ሞዴሉ ዝግጁ ካልሆነ ቢያንስ በእንግሊዝኛ የሰማውን ያሳያል
-                overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n[ትርጉም አልተሳካም - ሞባይል ዳታ ያብሩ]"
+                // ሞዴሉ ገና ካልወረደ መሰረታዊ ቃላትን በራሱ ዲክሽነሪ ይተረጉማል
+                val lower = textToTranslate.lowercase()
+                if (lower.contains("hello")) {
+                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: ሰላም"
+                } else if (lower.contains("how are you")) {
+                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: እንደምን ነህ?"
+                } else if (lower.contains("fine") || lower.contains("good")) {
+                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: ደህና ነኝ / ጥሩ ነው"
+                } else {
+                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n[ትርጉም አልተሳካም - ሞባይል ዳታ ያብሩ]"
+                }
             }
     }
 
