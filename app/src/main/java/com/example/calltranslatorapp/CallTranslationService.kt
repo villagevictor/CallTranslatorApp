@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.media.AudioManager
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.NoiseSuppressor
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -33,10 +35,13 @@ class CallTranslationService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isListeningLoopActive = false
 
+    // የሃርድዌር የድምፅ ማጣሪያዎች
+    private var echoCanceler: AcousticEchoCanceler? = null
+    private var noiseSuppressor: NoiseSuppressor? = null
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // በጥሪ ጊዜ የስልኩ ሁኔታ ሲቀየር ድምፅ ማዳመጫውን በሃይል መቀስቀስ
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            forceSpeakerAndListen()
+            forceSpeakerAndCleanAudio()
         }
     }
 
@@ -48,15 +53,15 @@ class CallTranslationService : AccessibilityService() {
             audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             setupOverlayWindow()
             initializeTranslator()
-            forceSpeakerAndListen()
+            forceSpeakerAndCleanAudio()
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    private fun forceSpeakerAndListen() {
+    private fun forceSpeakerAndCleanAudio() {
         try {
-            audioManager?.mode = AudioManager.MODE_NORMAL
+            audioManager?.mode = AudioManager.MODE_IN_CALL
             audioManager?.isSpeakerphoneOn = true
         } catch (e: Exception) {}
     }
@@ -66,22 +71,22 @@ class CallTranslationService : AccessibilityService() {
         
         overlayTextView = TextView(this).apply {
             text = "🎙️ የጥሪ መተርገሚያ (ልዩ አገልግሎት) ዝግጁ ነው..."
-            textSize = 18f
+            textSize = 16f
             setTextColor(0xFFFFFFFF.toInt())
-            setBackgroundColor(0xE6000000.toInt())
-            setPadding(40, 30, 40, 30)
+            setBackgroundColor(0xCC000000.toInt())
+            setPadding(35, 25, 35, 25)
             gravity = Gravity.CENTER
         }
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, // 🚀 በሁሉም ስክሪን ላይ በጥሪ ጊዜም የሚቆም
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP
-            y = 250
+            y = 200
         }
 
         try {
@@ -121,7 +126,8 @@ class CallTranslationService : AccessibilityService() {
 
                 speechRecognizer?.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) {
-                        forceSpeakerAndListen()
+                        forceSpeakerAndCleanAudio()
+                        activateHardwareFilters() // ማይኩ ሲከፈት ማጣሪያዎቹን አንቃ
                     }
                     override fun onBeginningOfSpeech() {}
                     override fun onRmsChanged(rmsd: Float) {}
@@ -148,7 +154,7 @@ class CallTranslationService : AccessibilityService() {
                         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
                             val partialText = matches[0]
-                            overlayTextView?.text = "HEARD: $partialText\n⏳ በመተርጎም ላይ..."
+                            overlayTextView?.text = "የሚሰማው ድምፅ: $partialText\n⏳ በመተርጎም ላይ..."
                         }
                     }
 
@@ -164,6 +170,23 @@ class CallTranslationService : AccessibilityService() {
         }
     }
 
+    // 🚀 የድምፅ ማስተጋባትን እና ጫጫታን በሃርድዌር ደረጃ መቁረጫ ዘዴ
+    private fun activateHardwareFilters() {
+        try {
+            // በአንድሮይድ ውስጥ የነቃ የኦዲዮ መቅረጫ (Audio Session ID) ካለ ፈልጎ ማጣሪያዎችን ማገናኘት
+            if (AcousticEchoCanceler.isAvailable()) {
+                echoCanceler = AcousticEchoCanceler.create(0) // 0 የሲስተሙ መደበኛ የጥሪ ሴሽን ነው
+                echoCanceler?.enabled = true
+            }
+            if (NoiseSuppressor.isAvailable()) {
+                noiseSuppressor = NoiseSuppressor.create(0)
+                noiseSuppressor?.enabled = true
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     private fun translateWithMLKit(textToTranslate: String) {
         if (translator == null) {
             overlayTextView?.text = "ENG 🇺🇸: $textToTranslate"
@@ -175,16 +198,13 @@ class CallTranslationService : AccessibilityService() {
                 overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: $translatedText"
             }
             ?.addOnFailureListener { e ->
-                // ኦፍላይን መዝገበ ቃላት
                 val lower = textToTranslate.lowercase()
                 if (lower.contains("hello")) {
                     overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: ሰላም"
                 } else if (lower.contains("how are you")) {
                     overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: እንደምን ነህ?"
-                } else if (lower.contains("fine") || lower.contains("good")) {
-                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: ደህና ነኝ"
                 } else {
-                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n[ትርጉም ለመስራት ሞባይል ዳታ ያብሩ]"
+                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate"
                 }
             }
     }
@@ -203,6 +223,8 @@ class CallTranslationService : AccessibilityService() {
         isListeningLoopActive = false
         mainHandler.removeCallbacksAndMessages(null)
         try {
+            echoCanceler?.release()
+            noiseSuppressor?.release()
             speechRecognizer?.destroy()
             translator?.close()
             if (overlayTextView != null) windowManager?.removeView(overlayTextView)
