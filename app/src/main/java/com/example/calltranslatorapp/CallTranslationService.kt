@@ -1,25 +1,19 @@
 package com.example.calltranslatorapp
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
+import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.media.AudioManager
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
 import android.os.Bundle
 import android.os.Handler
-import android.os.IBinder
 import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.view.Gravity
 import android.view.WindowManager
+import android.view.accessibility.AccessibilityEvent
 import android.widget.TextView
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
@@ -27,7 +21,7 @@ import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
 import java.util.ArrayList
 
-class CallTranslationService : Service() {
+class CallTranslationService : AccessibilityService() {
 
     private var windowManager: WindowManager? = null
     private var overlayTextView: TextView? = null
@@ -38,31 +32,40 @@ class CallTranslationService : Service() {
     private var translator: Translator? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isListeningLoopActive = false
-    private var dummyAudioRecord: AudioRecord? = null
 
-    override fun onCreate() {
-        super.onCreate()
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // በጥሪ ጊዜ የስልኩ ሁኔታ ሲቀየር ድምፅ ማዳመጫውን በሃይል መቀስቀስ
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            forceSpeakerAndListen()
+        }
+    }
+
+    override fun onInterrupt() {}
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
         try {
             audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            startForeground(1, createNotification())
-            
-            // በጥሪ ጊዜ የሚመጣውን የድምፅ መዛባት ለመከላከል
-            audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
-            audioManager?.isSpeakerphoneOn = true
-            
             setupOverlayWindow()
-            keepHardwareAudioOpen() // በጥሪ ጊዜ የማይክሮፎን መቆለፊያውን በጀርባ መስበሪያ
             initializeTranslator()
+            forceSpeakerAndListen()
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    private fun forceSpeakerAndListen() {
+        try {
+            audioManager?.mode = AudioManager.MODE_NORMAL
+            audioManager?.isSpeakerphoneOn = true
+        } catch (e: Exception) {}
     }
 
     private fun setupOverlayWindow() {
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         
         overlayTextView = TextView(this).apply {
-            text = "🎙️ የጥሪ መተርገሚያ ዝግጁ ነው... ይናገሩ"
+            text = "🎙️ የጥሪ መተርገሚያ (ልዩ አገልግሎት) ዝግጁ ነው..."
             textSize = 18f
             setTextColor(0xFFFFFFFF.toInt())
             setBackgroundColor(0xE6000000.toInt())
@@ -73,7 +76,7 @@ class CallTranslationService : Service() {
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, // 🚀 በሁሉም ስክሪን ላይ በጥሪ ጊዜም የሚቆም
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply {
@@ -88,26 +91,8 @@ class CallTranslationService : Service() {
         }
     }
 
-    private fun keepHardwareAudioOpen() {
-        Thread {
-            try {
-                val bufferSize = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-                if (bufferSize > 0) {
-                    dummyAudioRecord = AudioRecord(
-                        MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                        16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize
-                    )
-                    dummyAudioRecord?.startRecording()
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }.start()
-    }
-
     private fun initializeTranslator() {
         try {
-            // 🎯 የቋንቋ ስህተቱን ሙሉ በሙሉ ለማጥፋት ከ "TranslateLanguage" ዝርዝር ውስጥ "am" የሚለውን መለያ በቀጥታ እንጠራዋለን
             val options = TranslatorOptions.Builder()
                 .setSourceLanguage(TranslateLanguage.ENGLISH)
                 .setTargetLanguage(TranslateLanguage.fromLanguageTag("am")!!)
@@ -136,9 +121,7 @@ class CallTranslationService : Service() {
 
                 speechRecognizer?.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) {
-                        try {
-                            audioManager?.isSpeakerphoneOn = true
-                        } catch (e: Exception) {}
+                        forceSpeakerAndListen()
                     }
                     override fun onBeginningOfSpeech() {}
                     override fun onRmsChanged(rmsd: Float) {}
@@ -183,7 +166,7 @@ class CallTranslationService : Service() {
 
     private fun translateWithMLKit(textToTranslate: String) {
         if (translator == null) {
-            overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n[⚠️ የትርጉም ማሽን አልተነሳም]"
+            overlayTextView?.text = "ENG 🇺🇸: $textToTranslate"
             return
         }
 
@@ -192,16 +175,16 @@ class CallTranslationService : Service() {
                 overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: $translatedText"
             }
             ?.addOnFailureListener { e ->
-                // ሞዴሉ ገና ካልወረደ መሰረታዊ ቃላትን በራሱ ዲክሽነሪ ይተረጉማል
+                // ኦፍላይን መዝገበ ቃላት
                 val lower = textToTranslate.lowercase()
                 if (lower.contains("hello")) {
                     overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: ሰላም"
                 } else if (lower.contains("how are you")) {
                     overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: እንደምን ነህ?"
                 } else if (lower.contains("fine") || lower.contains("good")) {
-                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: ደህና ነኝ / ጥሩ ነው"
+                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: ደህና ነኝ"
                 } else {
-                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n[ትርጉም አልተሳካም - ሞባይል ዳታ ያብሩ]"
+                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\n[ትርጉም ለመስራት ሞባይል ዳታ ያብሩ]"
                 }
             }
     }
@@ -216,31 +199,10 @@ class CallTranslationService : Service() {
         }
     }
 
-    private fun createNotification(): Notification {
-        val channelId = "call_translator_pipeline"
-        val channelName = "Real-Time Call Translation Engine"
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW)
-            manager.createNotificationChannel(channel)
-        }
-
-        return Notification.Builder(this, channelId)
-            .setContentTitle("እውነተኛ የጥሪ ትርጉም መስመር")
-            .setContentText("የጥሪ ድምፅ መቆለፊያ ሰባሪው በጀርባ እየሰራ ነው...")
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .build()
-    }
-
-    override fun onBind(intent: Intent?): IBinder? = null
-
     override fun onDestroy() {
         isListeningLoopActive = false
         mainHandler.removeCallbacksAndMessages(null)
         try {
-            dummyAudioRecord?.stop()
-            dummyAudioRecord?.release()
             speechRecognizer?.destroy()
             translator?.close()
             if (overlayTextView != null) windowManager?.removeView(overlayTextView)
