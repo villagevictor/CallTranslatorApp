@@ -4,4 +4,4 @@
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagDefault"
     android:canRetrieveWindowContent="false"
-    android:description="የጥሪ ድምፅን ለመስማትና ለመተርጎም የሚያገለግል ልዩ ፍቃድ" />
+    android:description="@string/accessibility_desc" />
