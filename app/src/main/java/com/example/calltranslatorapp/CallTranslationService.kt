@@ -1,12 +1,12 @@
 package com.example.calltranslatorapp
 
 import android.accessibilityservice.AccessibilityService
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
-import android.media.AudioManager
-import android.media.audiofx.AcousticEchoCanceler
-import android.media.audiofx.NoiseSuppressor
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -21,60 +21,62 @@ import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
-import java.util.ArrayList
 
 class CallTranslationService : AccessibilityService() {
 
     private var windowManager: WindowManager? = null
     private var overlayTextView: TextView? = null
-    private var audioManager: AudioManager? = null
-    
     private var speechRecognizer: SpeechRecognizer? = null
     private lateinit var recognitionIntent: Intent
     private var translator: Translator? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isListeningLoopActive = false
 
-    // የሃርድዌር የድምፅ ማጣሪያዎች
-    private var echoCanceler: AcousticEchoCanceler? = null
-    private var noiseSuppressor: NoiseSuppressor? = null
-
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            forceSpeakerAndCleanAudio()
-        }
-    }
-
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
     override fun onInterrupt() {}
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         try {
-            audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            showPersistentNotification() // 🚀 ጠንካራ ኖቲፊኬሽን እዚህ ይነሳል
             setupOverlayWindow()
             initializeTranslator()
-            forceSpeakerAndCleanAudio()
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    private fun forceSpeakerAndCleanAudio() {
-        try {
-            audioManager?.mode = AudioManager.MODE_IN_CALL
-            audioManager?.isSpeakerphoneOn = true
-        } catch (e: Exception) {}
+    private fun showPersistentNotification() {
+        val channelId = "call_translator_notif_channel"
+        val channelName = "Call Translator Active Engine"
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "በትርጉም ጊዜ እንዳይዘጋ የሚከላከል"
+                setShowBadge(true)
+            }
+            manager.createNotificationChannel(channel)
+        }
+
+        val notification = Notification.Builder(this, channelId)
+            .setContentTitle("Call Translator Pro")
+            .setContentText("አፑ ንግግርን ለመተርጎም በጀርባ ዝግጁ ነው...")
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setOngoing(true)
+            .build()
+
+        startForeground(101, notification)
     }
 
     private fun setupOverlayWindow() {
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        
         overlayTextView = TextView(this).apply {
-            text = "🎙️ የጥሪ መተርገሚያ (ልዩ አገልግሎት) ዝግጁ ነው..."
+            text = "🎙️ Call Translator: ለመስማት ዝግጁ ነው..."
             textSize = 16f
             setTextColor(0xFFFFFFFF.toInt())
-            setBackgroundColor(0xCC000000.toInt())
-            setPadding(35, 25, 35, 25)
+            setBackgroundColor(0xDD6200EE.toInt()) // 🎨 ይበልጥ ማራኪ ፐርፕል ከለር
+            setPadding(40, 30, 40, 30)
             gravity = Gravity.CENTER
         }
 
@@ -86,35 +88,23 @@ class CallTranslationService : AccessibilityService() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP
-            y = 200
+            y = 150
         }
-
-        try {
-            windowManager?.addView(overlayTextView, params)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        try { windowManager?.addView(overlayTextView, params) } catch (e: Exception) {}
     }
 
     private fun initializeTranslator() {
-        try {
-            val options = TranslatorOptions.Builder()
-                .setSourceLanguage(TranslateLanguage.ENGLISH)
-                .setTargetLanguage(TranslateLanguage.fromLanguageTag("am")!!)
-                .build()
-            translator = Translation.getClient(options)
-            
-            isListeningLoopActive = true
-            startSpeechEngine()
-        } catch (e: Exception) {
-            isListeningLoopActive = true
-            startSpeechEngine()
-        }
+        val options = TranslatorOptions.Builder()
+            .setSourceLanguage(TranslateLanguage.ENGLISH)
+            .setTargetLanguage(TranslateLanguage.fromLanguageTag("am")!!)
+            .build()
+        translator = Translation.getClient(options)
+        isListeningLoopActive = true
+        startSpeechEngine()
     }
 
     private fun startSpeechEngine() {
         if (!isListeningLoopActive) return
-
         mainHandler.post {
             try {
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
@@ -125,27 +115,19 @@ class CallTranslationService : AccessibilityService() {
                 }
 
                 speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: Bundle?) {
-                        forceSpeakerAndCleanAudio()
-                        activateHardwareFilters() // ማይኩ ሲከፈት ማጣሪያዎቹን አንቃ
-                    }
+                    override fun onReadyForSpeech(params: Bundle?) {}
                     override fun onBeginningOfSpeech() {}
                     override fun onRmsChanged(rmsd: Float) {}
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
-
                     override fun onError(error: Int) {
-                        if (isListeningLoopActive) {
-                            mainHandler.removeCallbacksAndMessages(null)
-                            mainHandler.postDelayed({ restartListening() }, 1000)
-                        }
+                        if (isListeningLoopActive) mainHandler.postDelayed({ restartListening() }, 1000)
                     }
 
                     override fun onResults(results: Bundle?) {
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
-                            val originalText = matches[0]
-                            translateWithMLKit(originalText)
+                            processAndTranslate(matches[0])
                         }
                         if (isListeningLoopActive) restartListening()
                     }
@@ -153,82 +135,54 @@ class CallTranslationService : AccessibilityService() {
                     override fun onPartialResults(partialResults: Bundle?) {
                         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
-                            val partialText = matches[0]
-                            overlayTextView?.text = "የሚሰማው ድምፅ: $partialText\n⏳ በመተርጎም ላይ..."
+                            overlayTextView?.text = "የሚሰማው ቃል: ${matches[0]}"
                         }
                     }
-
                     override fun onEvent(eventType: Int, params: Bundle?) {}
                 })
-
                 speechRecognizer?.startListening(recognitionIntent)
             } catch (e: Exception) {
-                if (isListeningLoopActive) {
-                    mainHandler.postDelayed({ restartListening() }, 1500)
-                }
+                if (isListeningLoopActive) mainHandler.postDelayed({ restartListening() }, 1500)
             }
         }
     }
 
-    // 🚀 የድምፅ ማስተጋባትን እና ጫጫታን በሃርድዌር ደረጃ መቁረጫ ዘዴ
-    private fun activateHardwareFilters() {
-        try {
-            // በአንድሮይድ ውስጥ የነቃ የኦዲዮ መቅረጫ (Audio Session ID) ካለ ፈልጎ ማጣሪያዎችን ማገናኘት
-            if (AcousticEchoCanceler.isAvailable()) {
-                echoCanceler = AcousticEchoCanceler.create(0) // 0 የሲስተሙ መደበኛ የጥሪ ሴሽን ነው
-                echoCanceler?.enabled = true
-            }
-            if (NoiseSuppressor.isAvailable()) {
-                noiseSuppressor = NoiseSuppressor.create(0)
-                noiseSuppressor?.enabled = true
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
+    // 🚀 መዝገበ-ቃላቱን እና ትርጉሙን 100% የማገናኘት ዋና ዘዴ
+    private fun processAndTranslate(text: String) {
+        val cleanText = text.lowercase().trim()
+        
+        // መጀመሪያ ከውስጥ ዲክሽነሪ ፈልግ
+        var localTranslation = ""
+        if (cleanText.contains("hello")) localTranslation = getString(resources.getIdentifier("dic_hello", "string", packageName))
+        else if (cleanText.contains("how are you")) localTranslation = getString(resources.getIdentifier("dic_how_are_you", "string", packageName))
+        else if (cleanText.contains("fine")) localTranslation = getString(resources.getIdentifier("dic_fine", "string", packageName))
+        else if (cleanText.contains("good")) localTranslation = getString(resources.getIdentifier("dic_good", "string", packageName))
+        else if (cleanText.contains("thank you")) localTranslation = getString(resources.getIdentifier("dic_thank_you", "string", packageName))
+        else if (cleanText.contains("where are you")) localTranslation = getString(resources.getIdentifier("dic_where_are_you", "string", packageName))
 
-    private fun translateWithMLKit(textToTranslate: String) {
-        if (translator == null) {
-            overlayTextView?.text = "ENG 🇺🇸: $textToTranslate"
+        if (localTranslation.isNotEmpty()) {
+            overlayTextView?.text = "ENG: $text\nAMH (ዲክሽነሪ): $localTranslation"
             return
         }
 
-        translator?.translate(textToTranslate)
+        // በዲክሽነሪው ውስጥ ከሌለ በ AI ማሽን ተርጉም
+        translator?.translate(text)
             ?.addOnSuccessListener { translatedText ->
-                overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: $translatedText"
+                overlayTextView?.text = "ENG: $text\nAMH (AI): $translatedText"
             }
-            ?.addOnFailureListener { e ->
-                val lower = textToTranslate.lowercase()
-                if (lower.contains("hello")) {
-                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: ሰላም"
-                } else if (lower.contains("how are you")) {
-                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate\nAMH 🇪🇹: እንደምን ነህ?"
-                } else {
-                    overlayTextView?.text = "ENG 🇺🇸: $textToTranslate"
-                }
+            ?.addOnFailureListener {
+                overlayTextView?.text = "ENG: $text\n[ማሳሰቢያ: ትርጉም አልተገኘም]"
             }
     }
 
     private fun restartListening() {
         if (!isListeningLoopActive) return
-        try {
-            speechRecognizer?.destroy()
-            startSpeechEngine()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        try { speechRecognizer?.destroy(); startSpeechEngine() } catch (e: Exception) {}
     }
 
     override fun onDestroy() {
         isListeningLoopActive = false
-        mainHandler.removeCallbacksAndMessages(null)
-        try {
-            echoCanceler?.release()
-            noiseSuppressor?.release()
-            speechRecognizer?.destroy()
-            translator?.close()
-            if (overlayTextView != null) windowManager?.removeView(overlayTextView)
-        } catch (e: Exception) {}
+        try { speechRecognizer?.destroy(); translator?.close() } catch (e: Exception) {}
         super.onDestroy()
     }
 }

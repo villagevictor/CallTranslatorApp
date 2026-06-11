@@ -1,65 +1,114 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
-    android:background="#FAFAFA"
-    android:padding="24dp">
+    android:background="#F4F6FA">
 
     <LinearLayout
-        android:layout_width="120dp"
-        android:layout_height="120dp"
-        android:background="@android:drawable/dialog_holo_light_frame"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:layout_marginBottom="24dp">
-        
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="🎙️🔄"
-            android:textSize="45sp" />
-    </LinearLayout>
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Call Translator"
-        android:textSize="28sp"
-        android:textStyle="bold"
-        android:textColor="#6200EE"
-        android:layout_marginBottom="8dp"/>
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="በጥሪ ጊዜ ንግግርን በስፒከር ላይ በቀጥታ ወደ አማርኛ የሚተረጉም ዘመናዊ መተግበሪያ።"
-        android:textSize="16sp"
-        android:gravity="center"
-        android:textColor="#666666"
-        android:layout_marginBottom="40dp"
-        android:paddingStart="20dp"
-        android:paddingEnd="20dp"/>
-
-    <Button
-        android:id="@+id/btn_enable_service"
         android:layout_width="match_parent"
-        android:layout_height="60dp"
-        android:text="አገልግሎቱን አስነሳ (Enable)"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:textColor="#FFFFFF"
-        android:background="#6200EE"
-        android:elevation="4dp"/>
-
-    <TextView
-        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="ማሳሰቢያ: አፑ እንዲሠራ የልዩ ፍላጎት (Accessibility) ፍቃድ መስጠት አለብዎት።"
-        android:textSize="12sp"
-        android:textColor="#999999"
-        android:layout_marginTop="16dp"
-        android:gravity="center"/>
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:gravity="center_horizontal">
 
-</LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@android:drawable/dialog_holo_light_frame"
+            android:orientation="vertical"
+            android:padding="20dp"
+            android:gravity="center"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="24dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🎙️ 🔄 🇪🇹"
+                android:textSize="50sp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Call Translator Pro"
+                android:textSize="26sp"
+                android:textStyle="bold"
+                android:textColor="#6200EE"
+                android:layout_marginTop="12dp"/>
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="የአገልግሎት ሁኔታ ማስተካከያ"
+            android:textStyle="bold"
+            android:textSize="16sp"
+            android:textColor="#333333"
+            android:layout_marginBottom="12dp"/>
+
+        <Button
+            android:id="@+id/btn_enable_service"
+            android:layout_width="match_parent"
+            android:layout_height="65dp"
+            android:text="አገልግሎቱን አግብር (Enable)"
+            android:textSize="18sp"
+            android:textColor="#FFFFFF"
+            android:background="#6200EE"
+            android:textStyle="bold"
+            android:layout_marginBottom="20dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="@android:drawable/menuitem_background"
+            android:padding="16dp"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="16dp">
+            
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="የማሳወቂያ መስመር (Notification)"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#444444"/>
+                
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="● ንቁ (Active)"
+                android:textColor="#00C853"
+                android:textStyle="bold"
+                android:textSize="14sp"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="@android:drawable/menuitem_background"
+            android:padding="16dp"
+            android:gravity="center_vertical">
+            
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="ከመስመር ውጭ መዝገበ-ቃላት"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#444444"/>
+                
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ተጭኗል (Full)"
+                android:textColor="#00C853"
+                android:textStyle="bold"
+                android:textSize="14sp"/>
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

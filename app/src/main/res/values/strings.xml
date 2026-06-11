@@ -2,4 +2,21 @@
 <resources>
     <string name="app_name">CallTranslator</string>
     <string name="accessibility_desc">የጥሪ ድምፅን በስፒከር ላይ ለመስማትና ለመተርጎም የሚያገለግል ልዩ አገልግሎት ፍቃድ</string>
+    
+    <string name="dic_hello">ሰላም</string>
+    <string name="dic_how_are_you">እንደምን ነህ? / እንደምን ነሽ?</string>
+    <string name="dic_fine">ደህና ነኝ</string>
+    <string name="dic_good">ጥሩ ነው</string>
+    <string name="dic_thank_you">አመሰግናለሁ</string>
+    <string name="dic_yes">አዎ</string>
+    <string name="dic_no">አይደለም / እምቢ</string>
+    <string name="dic_where_are_you">የአለኸው የት ነው?</string>
+    <string name="dic_what_is_your_name">ስምህ ማን ነው?</string>
+    <string name="dic_goodbye">ደህና ሁን</string>
+    <string name="dic_please">እባክህ</string>
+    <string name="dic_who_is_this">ማን ልበል?</string>
+    <string name="dic_i_dont_know">አላውቅም</string>
+    <string name="dic_wait">ቆይ / ታገስ</string>
+    <string name="dic_call_me">ደውልልኝ</string>
+    <string name="dic_welcome">እንኳን ደህና መጣህ</string>
 </resources>
