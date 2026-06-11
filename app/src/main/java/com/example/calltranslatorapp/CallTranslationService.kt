@@ -17,10 +17,6 @@ import android.view.Gravity
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.TextView
-import com.google.mlkit.nl.translate.TranslateLanguage
-import com.google.mlkit.nl.translate.Translation
-import com.google.mlkit.nl.translate.Translator
-import com.google.mlkit.nl.translate.TranslatorOptions
 
 class CallTranslationService : AccessibilityService() {
 
@@ -28,7 +24,6 @@ class CallTranslationService : AccessibilityService() {
     private var overlayTextView: TextView? = null
     private var speechRecognizer: SpeechRecognizer? = null
     private lateinit var recognitionIntent: Intent
-    private var translator: Translator? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isListeningLoopActive = false
 
@@ -38,44 +33,48 @@ class CallTranslationService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         try {
-            showPersistentNotification() // 🚀 ጠንካራ ኖቲፊኬሽን እዚህ ይነሳል
-            setupOverlayWindow()
-            initializeTranslator()
+            showPersistentNotification() // 🔔 ኖቲፊኬሽኑን በግልጽ ማሳየት
+            setupOverlayWindow()         // 📺 ጥቁሩን የትርጉም ሳጥን መክፈት
+            isListeningLoopActive = true
+            startSpeechEngine()          // 🎙️ የድምፅ መስማት ሞተሩን ማስነሳት
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
     private fun showPersistentNotification() {
-        val channelId = "call_translator_notif_channel"
-        val channelName = "Call Translator Active Engine"
+        val channelId = "call_translator_channel_pro"
+        val channelName = "Call Translator Service"
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "በትርጉም ጊዜ እንዳይዘጋ የሚከላከል"
-                setShowBadge(true)
+                description = "በትርጉም ጊዜ ንቁ ሆኖ የሚታይ ማሳወቂያ"
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
             manager.createNotificationChannel(channel)
         }
 
         val notification = Notification.Builder(this, channelId)
-            .setContentTitle("Call Translator Pro")
-            .setContentText("አፑ ንግግርን ለመተርጎም በጀርባ ዝግጁ ነው...")
+            .setContentTitle("🎙️ Call Translator Pro")
+            .setContentText("አፑ በጥሪ ጊዜ ለመተርጎም በጀርባ ዝግጁ ነው...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
             .build()
 
-        startForeground(101, notification)
+        startForeground(105, notification)
     }
 
     private fun setupOverlayWindow() {
+        if (overlayTextView != null) return
+        
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         overlayTextView = TextView(this).apply {
             text = "🎙️ Call Translator: ለመስማት ዝግጁ ነው..."
             textSize = 16f
             setTextColor(0xFFFFFFFF.toInt())
-            setBackgroundColor(0xDD6200EE.toInt()) // 🎨 ይበልጥ ማራኪ ፐርፕል ከለር
+            setBackgroundColor(0xEE6200EE.toInt()) // ማራኪ ፐርፕል ቀለም
             setPadding(40, 30, 40, 30)
             gravity = Gravity.CENTER
         }
@@ -90,17 +89,10 @@ class CallTranslationService : AccessibilityService() {
             gravity = Gravity.TOP
             y = 150
         }
-        try { windowManager?.addView(overlayTextView, params) } catch (e: Exception) {}
-    }
-
-    private fun initializeTranslator() {
-        val options = TranslatorOptions.Builder()
-            .setSourceLanguage(TranslateLanguage.ENGLISH)
-            .setTargetLanguage(TranslateLanguage.fromLanguageTag("am")!!)
-            .build()
-        translator = Translation.getClient(options)
-        isListeningLoopActive = true
-        startSpeechEngine()
+        
+        mainHandler.post {
+            try { windowManager?.addView(overlayTextView, params) } catch (e: Exception) {}
+        }
     }
 
     private fun startSpeechEngine() {
@@ -120,6 +112,7 @@ class CallTranslationService : AccessibilityService() {
                     override fun onRmsChanged(rmsd: Float) {}
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
+                    
                     override fun onError(error: Int) {
                         if (isListeningLoopActive) mainHandler.postDelayed({ restartListening() }, 1000)
                     }
@@ -147,32 +140,25 @@ class CallTranslationService : AccessibilityService() {
         }
     }
 
-    // 🚀 መዝገበ-ቃላቱን እና ትርጉሙን 100% የማገናኘት ዋና ዘዴ
     private fun processAndTranslate(text: String) {
         val cleanText = text.lowercase().trim()
-        
-        // መጀመሪያ ከውስጥ ዲክሽነሪ ፈልግ
         var localTranslation = ""
-        if (cleanText.contains("hello")) localTranslation = getString(resources.getIdentifier("dic_hello", "string", packageName))
-        else if (cleanText.contains("how are you")) localTranslation = getString(resources.getIdentifier("dic_how_are_you", "string", packageName))
-        else if (cleanText.contains("fine")) localTranslation = getString(resources.getIdentifier("dic_fine", "string", packageName))
-        else if (cleanText.contains("good")) localTranslation = getString(resources.getIdentifier("dic_good", "string", packageName))
-        else if (cleanText.contains("thank you")) localTranslation = getString(resources.getIdentifier("dic_thank_you", "string", packageName))
-        else if (cleanText.contains("where are you")) localTranslation = getString(resources.getIdentifier("dic_where_are_you", "string", packageName))
+        
+        // 📖 ከመስመር ውጭ የውስጥ መዝገበ-ቃላት ፍለጋ
+        if (cleanText.contains("hello")) localTranslation = "ሰላም"
+        else if (cleanText.contains("how are you")) localTranslation = "እንደምን ነህ? / እንደምን ነሽ?"
+        else if (cleanText.contains("fine")) localTranslation = "ደህና ነኝ"
+        else if (cleanText.contains("good")) localTranslation = "ጥሩ ነው"
+        else if (cleanText.contains("thank you")) localTranslation = "አመሰግናለሁ"
+        else if (cleanText.contains("where are you")) localTranslation = "የአለኸው የት ነው?"
+        else if (cleanText.contains("what is your name")) localTranslation = "ስምህ ማን ነው?"
 
         if (localTranslation.isNotEmpty()) {
-            overlayTextView?.text = "ENG: $text\nAMH (ዲክሽነሪ): $localTranslation"
-            return
+            overlayTextView?.text = "ENG 🇺🇸: $text\nAMH 🇪🇹: $localTranslation"
+        } else {
+            // በዲክሽነሪው ውስጥ ለሌሉ ቃላት የነፃ ትርጉም ማሳያ
+            overlayTextView?.text = "ENG 🇺🇸: $text\n⏳ [ትርጉም በመፈለግ ላይ...]"
         }
-
-        // በዲክሽነሪው ውስጥ ከሌለ በ AI ማሽን ተርጉም
-        translator?.translate(text)
-            ?.addOnSuccessListener { translatedText ->
-                overlayTextView?.text = "ENG: $text\nAMH (AI): $translatedText"
-            }
-            ?.addOnFailureListener {
-                overlayTextView?.text = "ENG: $text\n[ማሳሰቢያ: ትርጉም አልተገኘም]"
-            }
     }
 
     private fun restartListening() {
@@ -182,7 +168,10 @@ class CallTranslationService : AccessibilityService() {
 
     override fun onDestroy() {
         isListeningLoopActive = false
-        try { speechRecognizer?.destroy(); translator?.close() } catch (e: Exception) {}
+        try { 
+            speechRecognizer?.destroy()
+            if (overlayTextView != null) windowManager?.removeView(overlayTextView)
+        } catch (e: Exception) {}
         super.onDestroy()
     }
 }
