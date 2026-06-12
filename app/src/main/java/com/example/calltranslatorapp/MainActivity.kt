@@ -21,6 +21,11 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
+import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.Translator
+import com.google.mlkit.nl.translate.TranslatorOptions
 
 class MainActivity : Activity() {
 
@@ -30,27 +35,46 @@ class MainActivity : Activity() {
     private lateinit var recognitionIntent: Intent
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isListening = false
+    private var translator: Translator? = null
+    private var isModelDownloaded = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // 1. በስክሪን ላይ የመሳል ፍቃድ (Overlay) ከሌለው አንድ ጊዜ ብቻ ይጠይቅ
+        // 1. የኦቨርሌይ ፍቃድ መጠየቅ
         if (!Settings.canDrawOverlays(this)) {
             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
             startActivity(intent)
         }
 
-        // 2. አንድሮይድ 13+ የኖቲፊኬሽን ፍቃድ እዚያው ስክሪን ላይ ይጠይቅ
+        // 2. የኖቲፊኬሽን ፍቃድ መጠየቅ
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 101)
             }
         }
 
+        // 3. የ AI መዝገበ-ቃላት (ML Kit) ሞዴልን ማዘጋጀት
+        val options = TranslatorOptions.Builder()
+            .setSourceLanguage(TranslateLanguage.ENGLISH)
+            .setTargetLanguage(TranslateLanguage.fromLanguageTag("am")!!)
+            .build()
+        translator = Translation.getClient(options)
+
+        // ሙሉውን ዲክሽነሪ በአንድ ጊዜ በጀርባ ማውረድ (ለመጀመሪያ ጊዜ ኢንተርኔት ይፈልጋል)
+        val conditions = DownloadConditions.Builder().build()
+        translator?.downloadModelIfNeeded(conditions)
+            ?.addOnSuccessListener {
+                isModelDownloaded = true
+                Toast.makeText(this, "📚 ሙሉ የአማርኛ ዲክሽነሪ ዝግጁ ሆኗል (Offline)!", Toast.LENGTH_LONG).show()
+            }
+            ?.addOnFailureListener { e ->
+                Toast.makeText(this, "ዲክሽነሪውን ለማውረድ ኢንተርኔት ያብሩ: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+
         val btnId = resources.getIdentifier("btn_enable_service", "id", packageName)
         findViewById<Button>(btnId).setOnClickListener {
-            // 3. ማይክሮፎን እዚያው ስክሪን ላይ "Allow" እንዲል መጠየቅ
             if (checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED) {
                 startTranslationEngine()
             } else {
@@ -62,8 +86,6 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         if (requestCode == 102 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             startTranslationEngine()
-        } else {
-            Toast.makeText(this, "አፑ ለመስራት የማይክሮፎን ፍቃድ ያስፈልገዋል!", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -86,8 +108,8 @@ class MainActivity : Activity() {
             manager.createNotificationChannel(channel)
         }
         val notification = Notification.Builder(this, channelId)
-            .setContentTitle("🎙️ Call Translator ንቁ ነው")
-            .setContentText("እንግሊዝኛን ሰምቶ ለመተርጎም ዝግጁ ነው...")
+            .setContentTitle("🎙️ Call Translator Pro")
+            .setContentText("ከመስመር ውጭ ሙሉ መዝገበ-ቃላት ገብቷል...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
             .build()
@@ -118,6 +140,7 @@ class MainActivity : Activity() {
     }
 
     private fun startListeningLoop() {
+        if (!isListening) return
         mainHandler.post {
             try {
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
@@ -134,13 +157,13 @@ class MainActivity : Activity() {
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
                     override fun onError(error: Int) {
-                        if (isListening) mainHandler.postDelayed({ restartListening() }, 500)
+                        if (isListening) mainHandler.postDelayed({ restartListening() }, 400)
                     }
 
                     override fun onResults(results: Bundle?) {
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
-                            processOfflineDictionary(matches[0])
+                            translateWithAI(matches[0])
                         }
                         if (isListening) restartListening()
                     }
@@ -148,7 +171,7 @@ class MainActivity : Activity() {
                     override fun onPartialResults(partialResults: Bundle?) {
                         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
-                            overlayTextView?.text = "እየሰማሁ ነው: ${matches[0]}"
+                            overlayTextView?.text = "የሚሰማው: ${matches[0]}"
                         }
                     }
                     override fun onEvent(eventType: Int, params: Bundle?) {}
@@ -160,24 +183,24 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun processOfflineDictionary(text: String) {
-        val cleanText = text.lowercase().trim()
-        var translation = "አልተገኘም"
-
-        // 📖 ከመስመር ውጭ ሙሉ መዝገበ-ቃላት (Offline Dictionary)
-        if (cleanText.contains("hello")) translation = "ሰላም"
-        else if (cleanText.contains("how are you")) translation = "እንደምን ነህ? / እንደምን ነሽ?"
-        else if (cleanText.contains("fine")) translation = "ደህና ነኝ"
-        else if (cleanText.contains("good")) translation = "ጥሩ ነው"
-        else if (cleanText.contains("thank you")) translation = "አመሰግናለሁ"
-        else if (cleanText.contains("where are you")) translation = "ያለኸው የት ነው?"
-        else if (cleanText.contains("what is your name")) translation = "ስምህ ማን ነው?"
-        else if (cleanText.contains("yes")) translation = "አዎ"
-        else if (cleanText.contains("no")) translation = "አይደለም"
-        else if (cleanText.contains("wait")) translation = "ቆይ"
-        else if (cleanText.contains("goodbye")) translation = "ደህና ሁን"
-
-        overlayTextView?.text = "ENG: $text\nAMH: $translation"
+    // 🚀 በሺዎች የሚቆጠሩ ቃላትን በአንድ ጊዜ የሚተረጉመው የ AI ሞተር
+    private fun translateWithAI(text: String) {
+        if (translator != null && isModelDownloaded) {
+            translator?.translate(text)
+                ?.addOnSuccessListener { translatedText ->
+                    overlayTextView?.text = "ENG 🇺🇸: $text\nAMH 🇪🇹: $translatedText"
+                }
+                ?.addOnFailureListener {
+                    overlayTextView?.text = "ENG 🇺🇸: $text\nAMH: [በትርጉም ላይ ስህተት]"
+                }
+        } else {
+            // ሞዴሉ ገና ካልወረደ መሰረታዊ የውስጥ ቃላትን መጠቀም
+            val clean = text.lowercase().trim()
+            var local = "እየተተረጎመ ነው..."
+            if (clean.contains("hello")) local = "ሰላም"
+            else if (clean.contains("good morning")) local = "እንደምን አደርክ/ሽ"
+            overlayTextView?.text = "ENG: $text\nAMH (Base): $local"
+        }
     }
 
     private fun restartListening() {
@@ -189,6 +212,7 @@ class MainActivity : Activity() {
         isListening = false
         try {
             speechRecognizer?.destroy()
+            translator?.close()
             if (overlayTextView != null) windowManager?.removeView(overlayTextView)
         } catch (e: Exception) {}
         super.onDestroy()
