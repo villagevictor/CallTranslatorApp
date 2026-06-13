@@ -32,9 +32,9 @@ class MainActivity : Activity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isListening = false
 
-    // 📖 350+ ከመስመር ውጭ የዕለት ተዕለት ንግግሮች እና ቃላት (0% Crash Risk)
+    // 📖 400+ ከመስመር ውጭ የሁለትዮሽ (Bi-directional) መዝገበ-ቃላት ጥቅል
     private val offlineDictionary = HashMap<String, String>().apply {
-        // === 1. የመጀመሪያዎቹ ሰላምታዎች እና አጠቃላይ ንግግሮች ===
+        // === [ሀ] ENGLISH TO AMHARIC MATRICES ===
         put("hello", "ሰላም")
         put("how are you", "እንደምን ነህ? / እንደምን ነሽ?")
         put("i am fine", "ደህና ነኝ")
@@ -116,7 +116,7 @@ class MainActivity : Activity() {
         put("i play football", "እግር ኳስ እጫወታለሁ")
         put("see you tomorrow", "ነገ እንገናኝ")
 
-        // 🛍️ === 2. የገበያ ንግግሮች (50 Shopping Conversations) ===
+        // 🛍️ የገበያ ንግግሮች
         put("where is the market", "ገበያው የት ነው?")
         put("how much is this", "ዋጋው ስንት ነው?")
         put("it is too expensive", "በጣም ውድ ነው")
@@ -129,11 +129,11 @@ class MainActivity : Activity() {
         put("keep the change", "መልሱ ይቅርብህ")
         put("where is the supermarket", "ሱፐርማርኬቱ የት ነው?")
         put("i am just looking", "ለማየት ብቻ ነው")
-        put("do you have a smaller size", "ከዚህ ያነሰ መጠን (ሳይዝ) አለህ?")
+        put("do you have a smaller size", "ከዚህ ያነሰ መጠን አለህ?")
         put("do you have a bigger size", "ከዚህ በትልቅ መጠን አለህ?")
-        put("can i try it on", "ልልካው (ልሞክረው) እችላለሁ?")
+        put("can i try it on", "ልልካው እችላለሁ?")
         put("where is the changing room", "ልብስ መቀየሪያ ክፍሉ የት ነው?")
-        put("it fits perfectly", "ልክ ልኬ ነው (በትክክል ይስማማል)")
+        put("it fits perfectly", "ልክ ልኬ ነው")
         put("do you have other colors", "ሌላ ቀለም አለህ?")
         put("i want the blue one", "ሰማያዊውን እፈልጋለሁ")
         put("i want the black one", "ጥቁሩን እፈልጋለሁ")
@@ -141,7 +141,7 @@ class MainActivity : Activity() {
         put("it is very cheap", "በጣም ርካሽ ነው")
         put("do you sell clothes", "ልብስ ትሸጣላችሁ?")
         put("where are the shoes", "ጫማዎቹ የት ናቸው?")
-        put("i need a shopping bag", "የገበያ ፌስታል (ቦርሳ) እፈልጋለሁ")
+        put("i need a shopping bag", "የገበያ ፌስታል እፈልጋለሁ")
         put("is it fresh", "ትኩስ ነው?")
         put("give me one kilo", "አንድ ኪሎ ስጠኝ")
         put("give me two kilos", "ሁለት ኪሎ ስጠኝ")
@@ -168,7 +168,7 @@ class MainActivity : Activity() {
         put("this is high quality", "ጥራቱ በጣም ከፍተኛ ነው")
         put("thank you for the discount", "ለቅናሹ አመሰግናለሁ")
 
-        // 🍳 === 3. የቤት እና የምግብ ንግግሮች (50 Home & Food Conversations) ===
+        // 🍳 የቤት እና የምግብ ንግግሮች
         put("what do you want to eat", "ምን መብላት ትፈልጋለህ?")
         put("i want coffee", "ቡና እፈልጋለሁ")
         put("give me water please", "እባክህ ውሃ ስጠኝ")
@@ -182,9 +182,9 @@ class MainActivity : Activity() {
         put("i want lunch", "ምሳ እፈልጋለሁ")
         put("i want dinner", "እራት እፈልጋለሁ")
         put("what is the special today", "ዛሬ ልዩ ምግብ ምንድነው?")
-        put("give me the menu please", "እባክህ የምግብ ዝርዝሩን (ሜኑ) ስጠኝ")
+        put("give me the menu please", "እባክህ የምግብ ዝርዝሩን ስጠኝ")
         put("i want meat", "ስጋ እፈልጋለሁ")
-        put("i am a vegetarian", "እኔ ስጋ አልበላም (የአትክልት ተጠቃሚ ነኝ)")
+        put("i am a vegetarian", "እኔ ስጋ አልበላም")
         put("i want chicken", "የዶሮ ስጋ እፈልጋለሁ")
         put("do you have fish", "ዓሳ አለህ?")
         put("i want traditional food", "የባህል ምግብ እፈልጋለሁ")
@@ -195,7 +195,7 @@ class MainActivity : Activity() {
         put("welcome to our home", "ወደ ቤታችን እንኳን ደህና መጡ")
         put("please sit down", "እባክህ ተቀመጥ")
         put("make yourself at home", "እንደ ቤትህ እይው")
-        put("where is the kitchen", "ወጥ ቤት (ኩሽና) የት ነው?")
+        put("where is the kitchen", "ወጥ ቤት የት ነው?")
         put("i am cooking dinner", "እራት እየሰራሁ ነው")
         put("can you wash the dishes", "እቃዎቹን ማጠብ ትችላለህ?")
         put("clean the room please", "እባክህ ክፍሉን አጽዳው")
@@ -220,8 +220,8 @@ class MainActivity : Activity() {
         put("lock the door", "በሩን ቁልፈው")
         put("i love my family", "ቤተሰቦቼን እወዳለሁ")
 
-        // 🚌 === 4. የትራንስፖርት ንግግሮች (50 Transport Conversations) ===
-        put("where is the bus station", "የባስ (አውቶቡስ) ተራው የት ነው?")
+        // 🚌 የትራንስፖርት ንግግሮች
+        put("where is the bus station", "የባስ ተራው የት ነው?")
         put("where is the train station", "የባቡር ጣቢያው የት ነው?")
         put("i want to go to the city center", "ወደ ከተማው መሀል መሄድ እፈልጋለሁ")
         put("how much is the ticket", "ትኬቱ ስንት ነው?")
@@ -245,14 +245,14 @@ class MainActivity : Activity() {
         put("where is the ticket office", "የትኬት መቁረጫው የት ነው?")
         put("can i sit here", "እዚህ መቀመጥ እችላለሁ?")
         put("the bus is late", "አውቶቡሱ ዘግይቷል")
-        put("is there a traffic jam", "የትራፊክ መጨናነቅ (ሰልፍ) አለ?")
+        put("is there a traffic jam", "የትራፊክ መጨናነቅ አለ?")
         put("drive slowly please", "እባክህ ቀስ ብለህ እዳው")
         put("drive faster please", "እባክህ ፈጠን አድርገው")
         put("where is the parking lot", "መኪና ማቆሚያው የት ነው?")
-        put("i have a lot of luggage", "ብዙ ሻንጣ (እቃ) አለኝ")
-        put("put it in the trunk", "በጀርባው (ተርንክ) ውስጥ አስቀምጠው")
+        put("i have a lot of luggage", "ብዙ ሻንጣ አለኝ")
+        put("put it in the trunk", "በጀርባው ውስጥ አስቀምጠው")
         put("fasten your seatbelt", "ቀበቶህን እሰር")
-        put("show me your license", "ፈቃድህን (ሊብሬ) አሳየኝ")
+        put("show me your license", "ፈቃድህን አሳየኝ")
         put("i am a tourist", "እኔ ጎብኝ ነኝ")
         put("where is the nearest hotel", "በጣም ቅርቡ ሆቴል የት ነው?")
         put("can you order a taxi for me", "ታክሲ ልታዝልኝ ትችላለህ?")
@@ -262,7 +262,7 @@ class MainActivity : Activity() {
         put("is there another way", "ሌላ መንገድ አለ?")
         put("follow that car", "ያቺን መኪና ተከተላት")
         put("where is the entrance", "መግቢያው የት ነው?")
-        put("where is the exit", "መውጫው የት ነው?")
+        put("where is the exit", "مውጫው የት ነው?")
         put("i am waiting for the bus", "አውቶቡስ እየጠበቅኩ ነው")
         put("the train is fast", "ባቡሩ ፈጣን ነው")
         put("i missed the bus", "አውቶቡሱ አመለጠኝ")
@@ -272,7 +272,7 @@ class MainActivity : Activity() {
         put("have a safe journey", "መልካም ጉዞ ይሁንልህ")
         put("we have arrived", "ደርሰናል")
 
-        // 📝 === 5. 100 አጠቃላይ ቃላት (100 Core Vocabulary Words) ===
+        // 📝 100 አጠቃላይ ቃላት
         put("house", "ቤት")
         put("car", "መኪና")
         put("money", "ገንዘብ")
@@ -359,7 +359,7 @@ class MainActivity : Activity() {
         put("hot", "ትኩስ")
         put("cold", "ቀዝቃዛ")
         put("new", "አዲስ")
-        put("old", "አሮጌ / አሮጊት")
+        put("old", "አሮጌ")
         put("young", "ወጣት")
         put("happy", "ደስተኛ")
         put("sad", "አዘንተኛ")
@@ -372,6 +372,90 @@ class MainActivity : Activity() {
         put("dirty", "ቆሻሻ")
         put("rich", "ሀብታም")
         put("poor", "ደሀ")
+
+        // 🏫 === 5. የትምህርት (Teacher & Students) ንግግሮች (50 Phrases) ===
+        put("good morning class", "እንደምን አደራችሁ የክፍሉ ተማሪዎች")
+        put("please open your books", "እባካችሁ መጽሐፋችሁን ክፈቱ")
+        put("who is absent today", "ዛሬ የቀረ ማን ነው?")
+        put("listen carefully please", "እባካችሁ በጥንቃቄ ስሙ")
+        put("do you have any questions", "ጥያቄ ያላችሁ አለ?")
+        put("raise your hand please", "እባክህ እጅህን አውጣ")
+        put("sit down please", "እባካችሁ ተቀመጡ")
+        put("stand up please", "እባክህ ቁም / እባክሽ ቁሚ")
+        put("look at the blackboard", "ጥቁር ሰሌዳውን እዩ")
+        put("write this down", "ይህንን ጻፉት")
+        put("clean the board please", "እባክህ ሰሌዳውን አጽዳው")
+        put("be quiet please", "እባካችሁ ዝም በሉ")
+        put("is everything clear", "ሁሉም ነገር ግልጽ ነው?")
+        put("yes teacher it is clear", "አዎ መምህር፣ ግልጽ ነው")
+        put("i don't understand this lesson", "ይህ ትምህርት አልገባኝም")
+        put("can you explain it again", "እባክህ ድጋሚ ልታብራራልኝ ትችላለህ?")
+        put("what is the homework", "የቤት ስራው ምንድነው?")
+        put("submit your homework tomorrow", "የቤት ስራችሁን ነገ አስረክቡ")
+        put("i forgot my book at home", "መጽሐፌን ቤት ረሳሁት")
+        put("can i borrow a pen", "ስክሪፕቶ ልበደር እችላለሁ?")
+        put("you did a great job", "በጣም ጥሩ ስራ ሰርተሃል")
+        put("excellent answer", "በጣም ምርጥ መልስ ነው")
+        put("try again next time", "ቀጣይ ጊዜ ድጋሚ ሞክር")
+        put("what is the meaning of this word", "የዚህ ቃል ትርጉም ምንድነው?")
+        put("spell this word please", "እባክህ የዚህን ቃል ፊደላት ቁጠር (ስፔል አድርገው)")
+        put("speak louder please", "እባክህ ድምጽህን ከፍ አድርግ")
+        put("who wants to read", "ማን ማንበብ ይፈልጋል?")
+        put("it is your turn", "የአንተ ተራ ነው")
+        put("time is up", "ሰዓት አልቋል")
+        put("have a nice weekend", "መልካም ቅዳሜና እሁድ ይሁንላችሁ")
+        put("when is the exam", "ፈተናው መቼ ነው?")
+        put("the exam is next week", "ፈተናው በሚቀጥለው ሳምንት ነው")
+        put("i got a good grade", "ጥሩ ውጤት አገኘሁ")
+        put("don't cheat in the exam", "በፈተና ላይ አትኮርጅ")
+        put("close your books now", "አሁን መጽሐፋችሁን ዝጉ")
+        put("who knows the answer", "መልሱን ማን ያውቃል?")
+        put("may i come in", "ልግባ?")
+        put("may i go out", "ልውጣ?")
+        put("you are late today", "ዛሬ ዘግይተሃል")
+        put("sorry for being late", "በመዘግየቴ ይቅርታ")
+        put("work in pairs", "ሁለት ሁለት ሆናችሁ ስሩ")
+        put("help each other", "እርስ በርሳችሁ ተረዳዱ")
+        put("put your pens down", "ስክሪፕቶአችሁን አስቀምጡ")
+        put("are you finished", "ጨረሳችሁ?")
+        put("not yet teacher", "ገና ነን መምህር")
+        put("yes we are finished", "አዎ ጨርሰናል")
+        put("open page twenty", "ገጽ ሃያ ላይ ክፈቱ")
+        put("check your answers", "መልሳችሁን ፈትሹ")
+        put("see you next class", "በሚቀጥለው ክፍለ-ጊዜ እንገናኝ")
+        put("thank you teacher", "አመሰግናለሁ መምህር")
+
+        // === [ለ] AMHARIC TO ENGLISH MATRICES (ተገላቢጦሽ የትርጉም ማትሪክስ) ===
+        put("ሰላም", "Hello")
+        put("እንደምን ነህ", "How are you?")
+        put("እንደምን ነሽ", "How are you?")
+        put("ደህና ነኝ", "I am fine")
+        put("መምህር", "Teacher")
+        put("ተማሪ", "Student")
+        put("ትምህርት ቤት", "School")
+        put("ጥያቄ አለኝ", "I have a question")
+        put("አልገባኝም", "I don't understand")
+        put("አመሰግናለሁ", "Thank you")
+        put("ቁም", "Stand up")
+        put("ተቀመጥ", "Sit down")
+        put("መጽሐፍ", "Book")
+        put("ስክሪፕቶ", "Pen")
+        put("ቤት", "House")
+        put("ሰዓት ስንት ነው", "What time is it?")
+        put("መንገዱ የት ነው", "Where is the way?")
+        put("ታክሲ እፈልጋለሁ", "I need a taxi")
+        put("እዚህ አቁም", "Stop here please")
+        put("ዋጋው ስንት ነው", "How much is this?")
+        put("በጣም ውድ ነው", "It is too expensive")
+        put("ቅናሽ አለ", "Is there a discount?")
+        put("ምግብ እፈልጋለሁ", "I want food")
+        put("ውሃ ስጠኝ", "Give me water please")
+        put("ርቦኛል", "I am hungry")
+        put("ጠምቶኛል", "I am thirsty")
+        put("ቁልፉ ጠፋብኝ", "I lost my key")
+        put("በሩን ዝጋ", "Close the door")
+        put("መስኮቱን ክፈት", "Open the window")
+        put("ነገ እንገናኝ", "See you tomorrow")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -413,7 +497,7 @@ class MainActivity : Activity() {
         setupOverlay()
         startListeningLoop()
         
-        Toast.makeText(this, "🚀 350+ ከመስመር ውጭ ቃላትና ንግግሮች ዝግጁ ናቸው!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "🚀 400+ የሁለትዮሽ (Bi-directional) ትርጉም ዝግጁ ነው!", Toast.LENGTH_SHORT).show()
     }
 
     private fun showNotification() {
@@ -427,7 +511,7 @@ class MainActivity : Activity() {
         val logoId = resources.getIdentifier("app_logo", "drawable", packageName)
         val notification = Notification.Builder(this, channelId)
             .setContentTitle("🎙️ Call Translator Pro")
-            .setContentText("በትራንስፖርት እና ቃላት ስሪት ላይ ነቅቷል...")
+            .setContentText("እንግሊዘኛ ⇆ አማርኛ የሁለትዮሽ ትርጉም በንቃት ላይ...")
             .setSmallIcon(if (logoId != 0) logoId else android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
             .build()
@@ -437,10 +521,10 @@ class MainActivity : Activity() {
     private fun setupOverlay() {
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         overlayTextView = TextView(this).apply {
-            text = "🎙️ Call Translator: እያዳመጥኩ ነው..."
+            text = "🎙️ Call Translator: Dual Listening Matrix Active..."
             textSize = 16f
             setTextColor(0xFFFFFFFF.toInt())
-            setBackgroundColor(0xEE110033.toInt())
+            setBackgroundColor(0xEE112200.toInt()) // High contrast deep matrix tint
             setPadding(40, 30, 40, 30)
             gravity = Gravity.CENTER
         }
@@ -464,7 +548,12 @@ class MainActivity : Activity() {
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
                 recognitionIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    
+                    // ⚡ CRITICAL UI CORE: Configured to support simultaneous English and Amharic Speech Recognition
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+                    putExtra(RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES, arrayListOf("en-US", "am-ET"))
+                    putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("am-ET"))
+                    
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 }
 
@@ -489,7 +578,8 @@ class MainActivity : Activity() {
                     override fun onPartialResults(partialResults: Bundle?) {
                         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
-                            overlayTextView?.text = "የሚሰማው: ${matches[0]}"
+                            // Real-time on-screen writing for both Amharic and English text streams[span_1](start_span)[span_1](end_span)
+                            overlayTextView?.text = "የሚሰማው (Detected): ${matches[0]}"
                         }
                     }
                     override fun onEvent(eventType: Int, params: Bundle?) {}
@@ -504,19 +594,29 @@ class MainActivity : Activity() {
     private fun lookupTranslation(spokenText: String) {
         val cleanText = spokenText.lowercase(Locale.ROOT).trim()
         var translatedText = ""
+        var isAmharicInput = false
 
-        // Matches strings accurately using word containment matrix
+        // Step 1: Detect if the spoken query matches Amharic or English mapping
         for ((key, value) in offlineDictionary) {
-            if (cleanText.contains(key)) {
+            if (cleanText.contains(key.lowercase(Locale.ROOT))) {
                 translatedText = value
+                // If the key is written in Amharic, it means input was Amharic
+                if (key.matches("^[\\u1200-\\u137F\\s,?.!]+$".toRegex())) {
+                    isAmharicInput = true
+                }
                 break
             }
         }
 
+        // Step 2: Render UI outputs based on directionality triggers[span_2](start_span)[span_2](end_span)
         if (translatedText.isNotEmpty()) {
-            overlayTextView?.text = "ENG 🇺🇸: $spokenText\nAMH 🇪🇹: $translatedText"
+            if (isAmharicInput) {
+                overlayTextView?.text = "AMH 🇪🇹: $spokenText\nENG 🇺🇸: $translatedText"
+            } else {
+                overlayTextView?.text = "ENG 🇺🇸: $spokenText\nAMH 🇪🇹: $translatedText"
+            }
         } else {
-            overlayTextView?.text = "ENG 🇺🇸: $spokenText\n⚠️ [ትርጉም አልተመዘገበም]"
+            overlayTextView?.text = "Detected Input: $spokenText\n⚠️ [ትርጉም አልተመዘገበም]"
         }
     }
 
