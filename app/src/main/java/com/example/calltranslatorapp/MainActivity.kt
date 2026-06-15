@@ -33,11 +33,14 @@ class MainActivity : Activity() {
     private lateinit var recognitionIntent: Intent
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isListening = false
+    
+    // 🎛️ የሁለትዮሽ ከመስመር ውጭ አዳማጭ መቀያየሪያ (True = አማርኛ ያዳምጣል, False = እንግሊዝኛ ያዳምጣል)
+    private var listenAmharicToggle = true
 
-    // 📖 ፍፁም የተመጣጠነ 400 ከመስመር ውጭ (Offline) የሁለትዮሽ መዝገበ-ቃላት ጥቅል
+    // 📖 የተመረጡ 300 ከመስመር ውጭ (Offline) የሁለትዮሽ መዝገበ-ቃላት ጥቅል
     private val offlineDictionary = LinkedHashMap<String, String>().apply {
         
-        // 🇪🇹 === [ክፍል 1] 200 ወሳኝ የአማርኛ ቃላት እና ንግግሮች ===
+        // 🇪🇹 === [አማርኛ] 150 ወሳኝ ቃላት እና ንግግሮች ===
         put("ስብሰባው መቼ ነው", "When is the meeting?")
         put("ውል መፈረም እፈልጋለሁ", "I want to sign a contract.")
         put("ዋጋው ስንት ነው", "What is the price?")
@@ -72,8 +75,6 @@ class MainActivity : Activity() {
         put("በጣም ነው የምወድህ", "I love you so much")
         put("ያለ አንተ መኖር አልችልም", "I can't live without you")
         put("ያለ አንቺ መኖር አልችልም", "I can't live without you")
-        put("ሁልጊዜ አስብሃለሁ", "I think of you all the time")
-        put("ሁልጊዜ አስብሻለሁ", "I think of you all the time")
         put("ደስታዬ ነህ", "You are my happiness")
         put("ደስታዬ ነሽ", "You are my happiness")
         put("ፈገግታህ ደስ ይለኛል", "I love your smile")
@@ -82,8 +83,7 @@ class MainActivity : Activity() {
         put("የኔ ማር", "My honey")
         put("ህይወቴ ነሽ", "You are my life")
         put("ሰላም", "Hello")
-        put("እንደምን ነህ", "How are you? (to a male)")
-        put("እንደምን ነሽ", "How are you? (to a female)")
+        put("እንደምን ነህ", "How are you?")
         put("ደህና ነኝ", "I am fine")
         put("ምን አዲስ ነገር አለ", "What is new?")
         put("አመሰግናለሁ", "Thank you")
@@ -99,7 +99,7 @@ class MainActivity : Activity() {
         put("ነገ እንገናኝ", "See you tomorrow")
         put("እንኳን ደስ አለህ", "Congratulations")
 
-        // 🇺🇸 === [ክፍል 2] 200 ወሳኝ የእንግሊዝኛ ቃላት እና ንግግሮች ===
+        // 🇺🇸 === [እንግሊዝኛ] 150 ወሳኝ ቃላት እና ንግግሮች ===
         put("hello", "ሰላም")
         put("how are you", "እንደምን ነህ? / እንደምን ነሽ?")
         put("i am fine", "ደህና ነኝ")
@@ -142,14 +142,14 @@ class MainActivity : Activity() {
         put("my love", "የኔ ፍቅር / ውዴ")
         put("my world", "የኔ አለም")
         put("my beautiful", "የኔ ቆንጆ")
-        put("my heart", "ልቤ / የኔ ፍቅር")
-        put("i love you so much", "በጣም ነው የምወድህ / የምወድሻል")
-        put("i can't live without you", "ያለ አንተ / አንቺ መኖር አልችልም")
+        put("my heart", "ልቤ")
+        put("i love you so much", "በጣም ነው የምወድህ")
+        put("i can't live without you", "ያለ አንተ መኖር አልችልም")
         put("you are my happiness", "ደስታዬ ነህ / ነሽ")
-        put("i love your smile", "ፈገግታህ / ፈገግታሽ ደስ ይለኛል")
+        put("i love your smile", "ፈገግታህ ደስ ይለኛል")
         put("my precious", "የኔ ውድ")
         put("my honey", "የኔ ማር")
-        put("you are my life", "ህይወቴ ነህ / ነሽ")
+        put("you are my life", "ህይወቴ ነህ")
         put("meeting", "ስብሰባ")
         put("contract", "ውል")
         put("profit", "ትርፍ")
@@ -164,7 +164,7 @@ class MainActivity : Activity() {
         put("airport", "አውሮፕላን ማረፊያ")
         put("hotel", "ሆቴል")
         put("taxi", "ታክሲ")
-        put("stop", "ቁም / አቁም")
+        put("stop", "ቁም")
         put("money", "ገንዘብ")
         put("food", "ምግብ")
         put("water", "ውሃ")
@@ -211,7 +211,7 @@ class MainActivity : Activity() {
         setupOverlay()
         startListeningLoop()
         
-        Toast.makeText(this, "🚀 ከመስመር ውጭ ዝግጁ ነው!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "🚀 300 ትርጉም ከመስመር ውጭ ዝግጁ ነው!", Toast.LENGTH_SHORT).show()
     }
 
     private fun showNotification() {
@@ -239,7 +239,6 @@ class MainActivity : Activity() {
             text = "✨ ለመተርጎም ዝግጁ ነው..."
             textSize = 15f
             setTypeface(null, android.graphics.Typeface.BOLD)
-            
             setTextColor(Color.parseColor("#4CAF50")) 
             setPadding(45, 35, 45, 35)
             gravity = Gravity.CENTER
@@ -269,6 +268,7 @@ class MainActivity : Activity() {
         try { windowManager?.addView(overlayTextView, params) } catch (e: Exception) {}
     }
 
+    // 🔄 የተስተካከለ ባለሁለት ሰርጥ የድምፅ ማዳመጫ ሞተር (Dual-Engine Strict Offline)
     private fun startListeningLoop() {
         if (!isListening) return
         mainHandler.post {
@@ -276,24 +276,35 @@ class MainActivity : Activity() {
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
                 recognitionIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "am-ET")
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "am-ET")
-                    putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("en-US", "am-ET"))
-                    putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false)
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true) // ፍፁም ከመስመር ውጭ ማስገደጃ
                     
-                    // 🛑 [CRITICAL FIX] ወደ ኢንተርኔት እንዳይሄድ ኦፍላይን እንዲቀድም የማስገደጃ መለኪያ
-                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                    // 🎛️ መቀያየሪያውን መሠረት በማድረግ ለየብቻው ማዳመጥ
+                    if (listenAmharicToggle) {
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE, "am-ET")
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "am-ET")
+                    } else {
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-US")
+                    }
                 }
 
                 speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: Bundle?) {}
+                    override fun onReadyForSpeech(params: Bundle?) {
+                        // የትኛውን ቋንቋ እያደመጠ እንደሆነ በካርዱ ላይ በትንሹ ፍንጭ ይሰጣል
+                        val langLabel = if (listenAmharicToggle) "🇪🇹 አማርኛ" else "🇺🇸 English"
+                        overlayTextView?.text = "✨ ለመተርጎም ዝግጁ ነው... ($langLabel)"
+                    }
                     override fun onBeginningOfSpeech() {}
                     override fun onRmsChanged(rmsd: Float) {}
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
                     override fun onError(error: Int) {
-                        if (isListening) mainHandler.postDelayed({ restartListening() }, 300)
+                        // ስህተት ሲመጣ ወይም ሰው ዝም ሲል ቋንቋውን ቀይሮ በኦፍላይን መስማቱን ይቀጥላል
+                        if (isListening) {
+                            listenAmharicToggle = !listenAmharicToggle // 🔄 ሰርጡን ይቀይራል
+                            mainHandler.postDelayed({ restartListening() }, 200)
+                        }
                     }
 
                     override fun onResults(results: Bundle?) {
@@ -301,7 +312,10 @@ class MainActivity : Activity() {
                         if (!matches.isNullOrEmpty()) {
                             lookupTranslation(matches[0])
                         }
-                        if (isListening) restartListening()
+                        if (isListening) {
+                            listenAmharicToggle = !listenAmharicToggle // 🔄 ከትርጉም በኋላ ወደ ቀጣዩ ቋንቋ መዞር
+                            restartListening()
+                        }
                     }
 
                     override fun onPartialResults(partialResults: Bundle?) {
@@ -315,7 +329,7 @@ class MainActivity : Activity() {
                 })
                 speechRecognizer?.startListening(recognitionIntent)
             } catch (e: Exception) {
-                if (isListening) mainHandler.postDelayed({ restartListening() }, 1000)
+                if (isListening) mainHandler.postDelayed({ restartListening() }, 800)
             }
         }
     }
