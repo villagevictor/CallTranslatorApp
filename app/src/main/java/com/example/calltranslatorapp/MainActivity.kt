@@ -16,8 +16,10 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import android.speech.RecognitionListener
@@ -34,15 +36,13 @@ class MainActivity : Activity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isListening = false
     
-    // 🎛️ የሰርጥ መቀያየሪያ (True = አማርኛ ያዳምጣል, False = እንግሊዝኛ ያዳምጣል)
-    // ስልክህ ላይ የእንግሊዝኛ ጥቅል ብቻ ስላለ መጀመሪያ በእንግሊዝኛ (False) እንዲነሳ እናደርገዋለን
-    private var listenAmharicToggle = false
-    private var isShowingResult = false // ትርጉም ስክሪን ላይ መኖሩን ማረጋገጫ
+    // 🎛️ የትርጉም ሞድ መቆጣጠሪያ (0 = አልተመረጠም, 1 = ENG to AMH, 2 = AMH to ENG)
+    private var translationMode = 0 
+    private var isShowingResult = false 
 
-    // 📖 የተመረጡ 300 ከመስመር ውጭ (Offline) የሁለትዮሽ መዝገበ-ቃላት ጥቅል
+    // 📖 300 የተመረጡ ከመስመር ውጭ የሁለትዮሽ መዝገበ-ቃላት ጥቅል
     private val offlineDictionary = LinkedHashMap<String, String>().apply {
-        
-        // 🇪🇹 === [አማርኛ] 150 ወሳኝ ቃላት እና ንግግሮች ===
+        // [ክፍል 1: አማርኛ] 150 ወሳኝ ቃላት
         put("ስብሰባው መቼ ነው", "When is the meeting?")
         put("ውል መፈረም እፈልጋለሁ", "I want to sign a contract.")
         put("ዋጋው ስንት ነው", "What is the price?")
@@ -101,7 +101,7 @@ class MainActivity : Activity() {
         put("ነገ እንገናኝ", "See you tomorrow")
         put("እንኳን ደስ አለህ", "Congratulations")
 
-        // 🇺🇸 === [እንግሊዝኛ] 150 ወሳኝ ቃላት እና ንግግሮች ===
+        // [ክፍል 2: እንግሊዝኛ] 150 ወሳኝ ቃላት
         put("hello", "ሰላም")
         put("how are you", "እንደምን ነህ? / እንደምን ነሽ?")
         put("i am fine", "ደህና ነኝ")
@@ -129,7 +129,7 @@ class MainActivity : Activity() {
         put("please give me a receipt", "ደረሰኝ ስጠኝ እባክህ")
         put("i am sick", "አሞኛል")
         put("i have a headache", "ራስ ምታት አለብኝ")
-        put("i have a fever", "ትকুሳት አለብኝ")
+        put("i have a fever", "ትኩሳት አለብኝ")
         put("where is the pharmacy", "ፋርማሲው የት ነው?")
         put("call an ambulance", "አምቡላንስ ጥራ")
         put("where is my passport", "ፓስፖርቴ የት ነው?")
@@ -176,44 +176,103 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        
+        // Dynamic UI Scaffolding ለቋንቋ መምረጫ
+        val mainLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.parseColor("#121212"))
+            padding = 50
+        }
+
+        val titleView = TextView(this).apply {
+            text = "🎙️ Call Translator Pro\n(100% Offline Mode)"
+            textSize = 22f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 80)
+        }
+        mainLayout.addView(titleView)
+
+        // 🔘 ቁልፍ 1: English to Amharic
+        val btnEngToAmh = Button(this).apply {
+            text = "🇺🇸 ENG ➔ 🇪🇹 AMH (የእንግሊዝኛ ድምፅ)"
+            setBackgroundColor(Color.parseColor("#FF9800")) // ብርቱካናማ
+            setTextColor(Color.BLACK)
+            textSize = 16f
+            setPadding(30, 40, 30, 40)
+        }
+        
+        // 🔘 ቁልፍ 2: Amharic to English
+        val btnAmhToEng = Button(this).apply {
+            text = "🇪🇹 AMH ➔ 🇺🇸 ENG (የአማርኛ ድምፅ)"
+            setBackgroundColor(Color.parseColor("#4CAF50")) // አረንጓዴ
+            setTextColor(Color.WHITE)
+            textSize = 16f
+            setPadding(30, 40, 30, 40)
+            val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            params.setMargins(0, 40, 0, 40)
+            layoutParams = params
+        }
+
+        // 🔘 ቁልፍ 3: የአማርኛ ጥቅል ማውረጃ (Voice Package Downloader)
+        val btnDownloadModel = Button(this).apply {
+            text = "📥 የአማርኛ Offline ጥቅል መጫኛ"
+            setBackgroundColor(Color.parseColor("#2196F3")) // ሰማያዊ
+            setTextColor(Color.WHITE)
+            textSize = 14f
+        }
+
+        btnEngToAmh.setOnClickListener { checkAndStartEngine(1) }
+        btnAmhToEng.setOnClickListener { checkAndStartEngine(2) }
+        btnDownloadModel.setOnClickListener { triggerGoogleVoiceSettings() }
+
+        mainLayout.addView(btnEngToAmh)
+        mainLayout.addView(btnAmhToEng)
+        mainLayout.addView(btnDownloadModel)
+        setContentView(mainLayout)
 
         if (!Settings.canDrawOverlays(this)) {
             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
             startActivity(intent)
         }
+    }
 
-        if (android.os.Build.VERSION.SDK_INT >= 33) {
-            if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 101)
-            }
-        }
-
-        val btnId = resources.getIdentifier("btn_enable_service", "id", packageName)
-        findViewById<Button>(btnId).setOnClickListener {
-            if (checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED) {
-                startTranslationEngine()
-            } else {
-                requestPermissions(arrayOf("android.permission.RECORD_AUDIO"), 102)
-            }
+    private fun checkAndStartEngine(mode: Int) {
+        translationMode = mode
+        if (checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED) {
+            startTranslationEngine()
+        } else {
+            requestPermissions(arrayOf("android.permission.RECORD_AUDIO"), 102)
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        if (requestCode == 102 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            startTranslationEngine()
+    private fun triggerGoogleVoiceSettings() {
+        val intent = Intent(Intent.ACTION_MAIN).apply {
+            setClassName("com.google.android.googlequicksearchbox", "com.google.android.apps.gsa.settingsui.VoiceSearchPreferences")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        try {
+            startActivity(intent)
+            Toast.makeText(this, "⚠️ Offline Speech Recognition ውስጥ ገብተው 'አማርኛ'ን ያውርዱ!", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            val backupIntent = Intent(Settings.ACTION_SETTINGS)
+            startActivity(backupIntent)
+            Toast.makeText(this, "Settings -> Language -> Voice Settings ውስጥ ያውርዱ", Toast.LENGTH_LONG).show()
         }
     }
 
     private fun startTranslationEngine() {
-        if (isListening) return
+        if (isListening) {
+            try { speechRecognizer?.destroy() } catch(e: Exception){}
+        }
         isListening = true
-        
         showNotification()
         setupOverlay()
         startListeningLoop()
         
-        Toast.makeText(this, "🚀 300 ትርጉም ከመስመር ውጭ ዝግጁ ነው!", Toast.LENGTH_SHORT).show()
+        val modeText = if (translationMode == 1) "English to Amharic" else "Amharic to English"
+        Toast.makeText(this, "🚀 ሞድ: $modeText ተነስቷል!", Toast.LENGTH_SHORT).show()
     }
 
     private fun showNotification() {
@@ -223,58 +282,51 @@ class MainActivity : Activity() {
             val channel = NotificationChannel(channelId, "Fast Translation", NotificationManager.IMPORTANCE_HIGH)
             manager.createNotificationChannel(channel)
         }
-        
-        val logoId = resources.getIdentifier("app_logo", "drawable", packageName)
         val notification = Notification.Builder(this, channelId)
             .setContentTitle("🎙️ Call Translator Pro")
-            .setContentText("ለመተርጎም ዝግጁ ነው...")
-            .setSmallIcon(if (logoId != 0) logoId else android.R.drawable.ic_btn_speak_now)
+            .setContentText("ከመስመር ውጭ ለመተርጎም ዝግጁ ነው...")
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
             .build()
         manager.notify(1, notification)
     }
 
     private fun setupOverlay() {
-        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        
-        overlayTextView = TextView(this).apply {
-            text = "✨ ለመተርጎም ዝግጁ ነው..."
-            textSize = 15f
-            setTypeface(null, android.graphics.Typeface.BOLD)
-            setTextColor(Color.parseColor("#4CAF50")) 
-            setPadding(45, 35, 45, 35)
-            gravity = Gravity.CENTER
-
-            val backgroundDrawable = GradientDrawable().apply {
-                setColor(Color.parseColor("#1A1A1A")) 
-                cornerRadius = 35f 
-                setStroke(3, Color.parseColor("#FF9800")) 
+        if (overlayTextView == null) {
+            windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            overlayTextView = TextView(this).apply {
+                textSize = 16f
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                setPadding(45, 45, 45, 45)
+                gravity = Gravity.CENTER
+                elevation = 20f
             }
-            background = backgroundDrawable
-            elevation = 15f
-        }
-
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP
-            y = 180
-            width = WindowManager.LayoutParams.MATCH_PARENT
-            horizontalMargin = 0.05f 
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP
+                y = 200
+                horizontalMargin = 0.05f
+            }
+            try { windowManager?.addView(overlayTextView, params) } catch (e: Exception) {}
         }
         
-        try { windowManager?.addView(overlayTextView, params) } catch (e: Exception) {}
+        overlayTextView?.text = "✨ ለመተርጎም ዝግጁ ነው..."
+        overlayTextView?.setTextColor(Color.parseColor("#4CAF50"))
+        val backgroundDrawable = GradientDrawable().apply {
+            setColor(Color.parseColor("#1A1A1A"))
+            cornerRadius = 40f
+            setStroke(4, Color.parseColor("#FF9800"))
+        }
+        overlayTextView?.background = backgroundDrawable
     }
 
     private fun startListeningLoop() {
-        if (!isListening) return
-        
-        // 🛑 ትርጉም ስክሪን ላይ ካለ አዲሱን ማዳመጫ ለተወሰነ ጊዜ ያቆማል
-        if (isShowingResult) return 
+        if (!isListening || isShowingResult) return
 
         mainHandler.post {
             try {
@@ -282,22 +334,20 @@ class MainActivity : Activity() {
                 recognitionIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true) 
+                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true) // ፍጹም ከመስመር ውጭ ማስገደጃ
                     
-                    if (listenAmharicToggle) {
-                        putExtra(RecognizerIntent.EXTRA_LANGUAGE, "am-ET")
-                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "am-ET")
-                    } else {
+                    if (translationMode == 1) {
                         putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
-                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-US")
+                    } else {
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE, "am-ET")
                     }
                 }
 
                 speechRecognizer?.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) {
                         if (!isShowingResult) {
-                            val langLabel = if (listenAmharicToggle) "🇪🇹 አማርኛ" else "🇺🇸 English"
-                            overlayTextView?.text = "✨ ለመተርጎም ዝግጁ ነው... ($langLabel)"
+                            val activeLabel = if (translationMode == 1) "🎙️ ማዳመጥ: 🇺🇸 English" else "🎙️ ማዳመጥ: 🇪🇹 አማርኛ"
+                            overlayTextView?.text = "✨ ዝግጁ ነው... ($activeLabel)"
                             overlayTextView?.setTextColor(Color.parseColor("#4CAF50"))
                         }
                     }
@@ -306,9 +356,9 @@ class MainActivity : Activity() {
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
                     override fun onError(error: Int) {
+                        // ስህተት ሲፈጠር (ሰው ዝም ሲል) ሳይጠፋ በዛው ቋንቋ እንዲቀጥል ማድረጊያ
                         if (isListening && !isShowingResult) {
-                            listenAmharicToggle = !listenAmharicToggle 
-                            mainHandler.postDelayed({ restartListening() }, 200)
+                            mainHandler.postDelayed({ restartListening() }, 250)
                         }
                     }
 
@@ -317,17 +367,14 @@ class MainActivity : Activity() {
                         if (!matches.isNullOrEmpty()) {
                             lookupTranslation(matches[0])
                         } else {
-                            if (isListening && !isShowingResult) {
-                                listenAmharicToggle = !listenAmharicToggle
-                                restartListening()
-                            }
+                            if (isListening && !isShowingResult) restartListening()
                         }
                     }
 
                     override fun onPartialResults(partialResults: Bundle?) {
                         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty() && !isShowingResult) {
-                            overlayTextView?.text = "🎙️ ሰማሁት: ${matches[0]}"
+                            overlayTextView?.text = "🎧 እየሰማሁ ነው: ${matches[0]}"
                             overlayTextView?.setTextColor(Color.parseColor("#FF9800"))
                         }
                     }
@@ -335,7 +382,7 @@ class MainActivity : Activity() {
                 })
                 speechRecognizer?.startListening(recognitionIntent)
             } catch (e: Exception) {
-                if (isListening && !isShowingResult) mainHandler.postDelayed({ restartListening() }, 800)
+                if (isListening && !isShowingResult) mainHandler.postDelayed({ restartListening() }, 1000)
             }
         }
     }
@@ -363,29 +410,32 @@ class MainActivity : Activity() {
         }
 
         if (translatedText.isNotEmpty()) {
-            isShowingResult = true // 🔒 ፅሁፉ እንዳይጠፋ ስክሪኑን ይቆልፋል
+            isShowingResult = true // 🔒 ስክሪኑን ለተጠቃሚው ማቆያ
             try { speechRecognizer?.destroy() } catch (e: Exception) {}
 
             overlayTextView?.setTextColor(Color.parseColor("#4CAF50"))
-            if (matchedKey.matches("^[\\u1200-\\u137F\\s,?.!]+$".toRegex())) {
+            if (translationMode == 2) {
                 overlayTextView?.text = "🇪🇹 አማርኛ: $rawInput\n🇺🇸 ENG: $translatedText"
             } else {
                 overlayTextView?.text = "🇺🇸 ENG: $rawInput\n🇪🇹 አማርኛ: $translatedText"
             }
 
-            // ⏱️ [CRITICAL FIX] ውጤቱ በስክሪን ሰከንድ ሳይጠፋ ለ 7 ሰከንድ ሙሉ እንዲቆይ ማድረጊያ
+            // ⏱️ ፅሁፉ በስክሪን ሰከንድ ሳይጠፋ ለ 7 ሰከንድ ሙሉ እንዲቆይ ማድረጊያ
             mainHandler.postDelayed({
-                isShowingResult = false // 🔓 ቆልፉን ይከፍታል
-                listenAmharicToggle = !listenAmharicToggle
+                isShowingResult = false 
                 restartListening()
             }, 7000) 
 
         } else {
-            // ትርጉም ካልተገኘ ወዲያው ማዳመጡን ይቀጥላል
-            if (isListening) {
-                listenAmharicToggle = !listenAmharicToggle
+            // ትርጉም ባይገኝም ፅሁፉን አሳይቶ ለ 4 ሰከንድ ያቆየዋል
+            isShowingResult = true
+            overlayTextView?.setTextColor(Color.parseColor("#FF5252"))
+            overlayTextView?.text = "🎙️ ግብዓት: $rawInput\n⚠️ [ይህ ቃል በ 300 ቃላት ጥቅል ውስጥ የለም]"
+            
+            mainHandler.postDelayed({
+                isShowingResult = false
                 restartListening()
-            }
+            }, 4000)
         }
     }
 
