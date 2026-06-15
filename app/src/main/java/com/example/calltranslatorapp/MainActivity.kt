@@ -182,7 +182,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(Color.parseColor("#121212"))
-            padding = 50
+            setPadding(50, 50, 50, 50) // [FIXED HERE] padding ስህተት ተስተካክሏል
         }
 
         val titleView = TextView(this).apply {
@@ -197,7 +197,7 @@ class MainActivity : Activity() {
         // 🔘 ቁልፍ 1: English to Amharic
         val btnEngToAmh = Button(this).apply {
             text = "🇺🇸 ENG ➔ 🇪🇹 AMH (የእንግሊዝኛ ድምፅ)"
-            setBackgroundColor(Color.parseColor("#FF9800")) // ብርቱካናማ
+            setBackgroundColor(Color.parseColor("#FF9800"))
             setTextColor(Color.BLACK)
             textSize = 16f
             setPadding(30, 40, 30, 40)
@@ -206,7 +206,7 @@ class MainActivity : Activity() {
         // 🔘 ቁልፍ 2: Amharic to English
         val btnAmhToEng = Button(this).apply {
             text = "🇪🇹 AMH ➔ 🇺🇸 ENG (የአማርኛ ድምፅ)"
-            setBackgroundColor(Color.parseColor("#4CAF50")) // አረንጓዴ
+            setBackgroundColor(Color.parseColor("#4CAF50"))
             setTextColor(Color.WHITE)
             textSize = 16f
             setPadding(30, 40, 30, 40)
@@ -218,7 +218,7 @@ class MainActivity : Activity() {
         // 🔘 ቁልፍ 3: የአማርኛ ጥቅል ማውረጃ (Voice Package Downloader)
         val btnDownloadModel = Button(this).apply {
             text = "📥 የአማርኛ Offline ጥቅል መጫኛ"
-            setBackgroundColor(Color.parseColor("#2196F3")) // ሰማያዊ
+            setBackgroundColor(Color.parseColor("#2196F3"))
             setTextColor(Color.WHITE)
             textSize = 14f
         }
@@ -334,7 +334,7 @@ class MainActivity : Activity() {
                 recognitionIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true) // ፍጹም ከመስመር ውጭ ማስገደጃ
+                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true) 
                     
                     if (translationMode == 1) {
                         putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
@@ -356,7 +356,6 @@ class MainActivity : Activity() {
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
                     override fun onError(error: Int) {
-                        // ስህተት ሲፈጠር (ሰው ዝም ሲል) ሳይጠፋ በዛው ቋንቋ እንዲቀጥል ማድረጊያ
                         if (isListening && !isShowingResult) {
                             mainHandler.postDelayed({ restartListening() }, 250)
                         }
@@ -410,7 +409,7 @@ class MainActivity : Activity() {
         }
 
         if (translatedText.isNotEmpty()) {
-            isShowingResult = true // 🔒 ስክሪኑን ለተጠቃሚው ማቆያ
+            isShowingResult = true 
             try { speechRecognizer?.destroy() } catch (e: Exception) {}
 
             overlayTextView?.setTextColor(Color.parseColor("#4CAF50"))
@@ -420,14 +419,13 @@ class MainActivity : Activity() {
                 overlayTextView?.text = "🇺🇸 ENG: $rawInput\n🇪🇹 አማርኛ: $translatedText"
             }
 
-            // ⏱️ ፅሁፉ በስክሪን ሰከንድ ሳይጠፋ ለ 7 ሰከንድ ሙሉ እንዲቆይ ማድረጊያ
+            // ውጤቱ ለ 7 ሰከንድ እንዲቆይ ማድረጊያ
             mainHandler.postDelayed({
                 isShowingResult = false 
                 restartListening()
             }, 7000) 
 
         } else {
-            // ትርጉም ባይገኝም ፅሁፉን አሳይቶ ለ 4 ሰከንድ ያቆየዋል
             isShowingResult = true
             overlayTextView?.setTextColor(Color.parseColor("#FF5252"))
             overlayTextView?.text = "🎙️ ግብዓት: $rawInput\n⚠️ [ይህ ቃል በ 300 ቃላት ጥቅል ውስጥ የለም]"
