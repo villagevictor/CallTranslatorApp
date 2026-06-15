@@ -10,6 +10,9 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -37,6 +40,8 @@ class MainActivity : Activity() {
     private var isListening = false
     private var translationMode = 0 
     private var isShowingResult = false 
+    private var echoCanceler: AcousticEchoCanceler? = null
+    private var dummyAudioRecord: AudioRecord? = null
 
     // 📖 50 ወሳኝ ቃላት + 50 ዕለታዊ ንግግሮች (በአጠቃላይ 100 ከመስመር ውጭ መዝገበ-ቃላት)
     private val offlineDictionary = LinkedHashMap<String, String>().apply {
@@ -158,7 +163,7 @@ class MainActivity : Activity() {
         }
 
         val titleView = TextView(this).apply {
-            text = "🎙️ Call Translator Pro\n(Optimized 100 Words)"
+            text = "🎙️ Call Translator Pro\n(V76 Optimized & Anti-Echo)"
             textSize = 22f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
@@ -204,6 +209,21 @@ class MainActivity : Activity() {
         if (!Settings.canDrawOverlays(this)) {
             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
             startActivity(intent)
+        }
+        
+        initEchoCanceler()
+    }
+
+    private fun initEchoCanceler() {
+        if (checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED) {
+            try {
+                if (AcousticEchoCanceler.isAvailable()) {
+                    val bufferSize = AudioRecord.getMinBufferSize(16000, android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT)
+                    dummyAudioRecord = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, 16000, android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT, bufferSize)
+                    echoCanceler = AcousticEchoCanceler.create(dummyAudioRecord!!.audioSessionId)
+                    echoCanceler?.enabled = true
+                }
+            } catch (e: Exception) { }
         }
     }
 
@@ -355,19 +375,21 @@ class MainActivity : Activity() {
         val rawInput = spokenText.trim()
         val lowerInput = rawInput.lowercase(Locale.ROOT)
         var translatedText = ""
-        var matchedKey = ""
 
+        // 🧠 Flexible Fuzzy Search Scheme (ለስላሳ ፍለጋ ስልተ-ቀመር)
         for (key in offlineDictionary.keys) {
-            if (key.matches("^[\\u1200-\\u137F\\s,?.!]+$".toRegex())) {
-                if (rawInput.contains(key) || key.contains(rawInput)) {
+            val isAmharicKey = key.matches("^[\\u1200-\\u137F\\s,?.!]+$".toRegex())
+            if (isAmharicKey) {
+                // አማርኛ ከሆነ ቃላቱ በከፊል ቢመሳሰሉም እንዲይዘው ማድረጊያ
+                if (rawInput.contains(key) || key.contains(rawInput) || 
+                    rawInput.replace("ው", "").contains(key.replace("ው", ""))) {
                     translatedText = offlineDictionary[key] ?: ""
-                    matchedKey = key
                     break
                 }
             } else {
+                // እንግሊዝኛ ከሆነ በ lowercase መፈተሻ
                 if (lowerInput.contains(key.lowercase(Locale.ROOT)) || key.lowercase(Locale.ROOT).contains(lowerInput)) {
                     translatedText = offlineDictionary[key] ?: ""
-                    matchedKey = key
                     break
                 }
             }
@@ -411,6 +433,8 @@ class MainActivity : Activity() {
         try {
             speechRecognizer?.destroy()
             if (overlayTextView != null) windowManager?.removeView(overlayTextView)
+            echoCanceler?.release()
+            dummyAudioRecord?.release()
         } catch (e: Exception) {}
         super.onDestroy()
     }
