@@ -35,80 +35,68 @@ class MainActivity : Activity() {
     private lateinit var recognitionIntent: Intent
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isListening = false
-    
-    // 🎛️ የትርጉም ሞድ መቆጣጠሪያ (0 = አልተመረጠም, 1 = ENG to AMH, 2 = AMH to ENG)
     private var translationMode = 0 
     private var isShowingResult = false 
 
-    // 📖 300 የተመረጡ ከመስመር ውጭ የሁለትዮሽ መዝገበ-ቃላት ጥቅል
+    // 📖 50 ወሳኝ ቃላት + 50 ዕለታዊ ንግግሮች (በአጠቃላይ 100 ከመስመር ውጭ መዝገበ-ቃላት)
     private val offlineDictionary = LinkedHashMap<String, String>().apply {
-        // [ክፍል 1: አማርኛ] 150 ወሳኝ ቃላት
-        put("ስብሰባው መቼ ነው", "When is the meeting?")
-        put("ውል መፈረም እፈልጋለሁ", "I want to sign a contract.")
-        put("ዋጋው ስንት ነው", "What is the price?")
-        put("ይህ የቢዝነስ እቅዳችን ነው", "This is our business plan.")
-        put("ትርፋችን ጨምሯል", "Our profit has increased.")
-        put("ኪሳራ አጋጥሞናል", "We have faced a loss.")
-        put("የባንክ ሂሳቤን ማረጋገጥ እፈልጋለሁ", "I want to check my bank account.")
-        put("ደረሰኝ ስጠኝ እባክህ", "Please give me a receipt.")
-        put("አሞኛል ዶክተር መጥራት እፈልጋለሁ", "I am sick, I want to call a doctor.")
-        put("ራስ ምታት አለብኝ", "I have a headache.")
-        put("ትኩሳት አለብኝ", "I have a fever.")
-        put("ፋርማሲው የት ነው", "Where is the pharmacy?")
-        put("አምቡላንስ ጥራ", "Call an ambulance.")
-        put("ፓስፖርቴ የት ነው", "Where is my passport?")
-        put("ቪዛ ማግኘት እፈልጋለሁ", "I want to get a visa.")
-        put("የአውሮፕላን ትኬት ስንት ነው", "How much is the flight ticket?")
-        put("ሻንጣዬ ጠፍቷል", "My luggage is lost.")
-        put("የአውሮፕላን ማረፊያ የት ነው", "Where is the airport?")
-        put("ሆቴል መያዝ እፈልጋለሁ", "I want to book a hotel.")
-        put("ታክሲ የት አገኛለሁ", "Where can I find a taxi?")
-        put("እወድሃለሁ", "I love you (to a male)")
-        put("እወድሻለሁ", "I love you (to a female)")
-        put("ናፍቀኸኛል", "I miss you (to a male)")
-        put("ናፍቀሽኛል", "I miss you (to a female)")
-        put("ውዴ", "My love")
-        put("የኔ ፍቅር", "My love")
-        put("የኔ አለም", "My world")
-        put("የኔ ቆንጆ", "My beautiful")
-        put("ልቤ", "My heart")
-        put("የልቤ ንጉስ", "King of my heart")
-        put("የልቤ ንግስት", "Queen of my heart")
-        put("በጣም ነው የምወድህ", "I love you so much")
-        put("ያለ አንተ መኖር አልችልም", "I can't live without you")
-        put("ያለ አንቺ መኖር አልችልም", "I can't live without you")
-        put("ደስታዬ ነህ", "You are my happiness")
-        put("ደስታዬ ነሽ", "You are my happiness")
-        put("ፈገግታህ ደስ ይለኛል", "I love your smile")
-        put("ፈገግታሽ ደስ ይለኛል", "I love your smile")
-        put("የኔ ውድ", "My precious")
-        put("የኔ ማር", "My honey")
-        put("ህይወቴ ነሽ", "You are my life")
-        put("ሰላም", "Hello")
-        put("እንደምን ነህ", "How are you?")
-        put("ደህና ነኝ", "I am fine")
-        put("ምን አዲስ ነገር አለ", "What is new?")
-        put("አመሰግናለሁ", "Thank you")
-        put("ይቅርታ", "Excuse me / Sorry")
-        put("አልገባኝም", "I don't understand")
-        put("ስምህ ማን ነው", "What is your name?")
-        put("መንገድ ጠፋኝ", "I am lost")
-        put("ሰዓት ስንት ነው", "What time is it?")
-        put("እንሂድ", "Let's go")
-        put("ደህና ሁን", "Goodbye")
-        put("ቁም", "Stop")
-        put("እባክህ እርዳኝ", "Please help me")
-        put("ነገ እንገናኝ", "See you tomorrow")
-        put("እንኳን ደስ አለህ", "Congratulations")
-
-        // [ክፍል 2: እንግሊዝኛ] 150 ወሳኝ ቃላት
+        // 🔥 [50 ወሳኝ ቃላት - 25 English / 25 Amharic]
         put("hello", "ሰላም")
+        put("thank you", "አመሰግናለሁ")
+        put("sorry", "አዝናለሁ")
+        put("please", "እባክህ")
+        put("yes", "አዎ")
+        put("no", "አይ")
+        put("money", "ገንዘብ")
+        put("food", "ምግብ")
+        put("water", "ውሃ")
+        put("doctor", "ዶክተር")
+        put("hospital", "ሆስፒታል")
+        put("pharmacy", "ፋርማሲ")
+        put("passport", "ፓስፖርት")
+        put("visa", "ቪዛ")
+        put("ticket", "ትኬት")
+        put("airport", "አውሮፕላን ማረፊያ")
+        put("hotel", "ሆቴል")
+        put("taxi", "ታክሲ")
+        put("stop", "ቁም")
+        put("friend", "ጓደኛ")
+        put("time", "ሰዓት")
+        put("today", "ዛሬ")
+        put("tomorrow", "ነገ")
+        put("house", "ቤት")
+        put("name", "ስም")
+        
+        put("ሰላም", "Hello")
+        put("አመሰግናለሁ", "Thank you")
+        put("ይቅርታ", "Sorry")
+        put("እባክህ", "Please")
+        put("ገንዘብ", "Money")
+        put("ምግብ", "Food")
+        put("ውሃ", "Water")
+        put("ዶክተር", "Doctor")
+        put("ሆስፒታል", "Hospital")
+        put("ፋርማሲ", "Pharmacy")
+        put("ፓስፖርት", "Passport")
+        put("ቪዛ", "Visa")
+        put("ትኬት", "Ticket")
+        put("ሆቴል", "Hotel")
+        put("ታክሲ", "Taxi")
+        put("ቁም", "Stop")
+        put("ጓደኛ", "Friend")
+        put("ሰዓት", "Time")
+        put("ዛሬ", "Today")
+        put("ነገ", "Tomorrow")
+        put("ስም", "Name")
+        put("ቢሮ", "Office")
+        put("ስልክ", "Phone")
+        put("ዋጋ", "Price")
+        put("ትልቅ", "Big")
+
+        // 🔥 [50 ዕለታዊ ንግግሮች - 25 English / 25 Amharic]
         put("how are you", "እንደምን ነህ? / እንደምን ነሽ?")
         put("i am fine", "ደህና ነኝ")
         put("what is new", "ምን አዲስ ነገር አለ?")
-        put("thank you", "አመሰግናለሁ")
-        put("excuse me", "ይቅርታ")
-        put("sorry", "አዝናለሁ")
         put("i don't understand", "አልገባኝም")
         put("what is your name", "ስምህ ማን ነው?")
         put("where is the bathroom", "መጸዳጃ ቤቱ የት ነው?")
@@ -120,73 +108,57 @@ class MainActivity : Activity() {
         put("see you tomorrow", "ነገ እንገናኝ")
         put("congratulations", "እንኳን ደስ አለህ")
         put("when is the meeting", "ስብሰባው መቼ ነው?")
-        put("i want to sign a contract", "ውል መፈረም እፈልጋለሁ")
         put("what is the price", "ዋጋው ስንት ነው?")
-        put("this is our business plan", "ይህ የቢዝነስ እቅዳችን ነው")
-        put("our profit has increased", "ትርፋችን ጨምሯል")
-        put("we have faced a loss", "ኪሳራ አጋጥሞናል")
-        put("i want to check my bank account", "የባንክ ሂሳቤን ማረጋገጥ እፈልጋለሁ")
-        put("please give me a receipt", "ደረሰኝ ስጠኝ እባክህ")
-        put("i am sick", "አሞኛል")
-        put("i have a headache", "ራስ ምታት አለብኝ")
-        put("i have a fever", "ትኩሳት አለብኝ")
-        put("where is the pharmacy", "ፋርማሲው የት ነው?")
-        put("call an ambulance", "አምቡላንስ ጥራ")
-        put("where is my passport", "ፓስፖርቴ የት ነው?")
-        put("i want to get a visa", "ቪዛ ማግኘት እፈልጋለሁ")
-        put("how much is the flight ticket", "የአውሮፕላን ትኬት ስንት ነው?")
-        put("my luggage is lost", "ሻንጣዬ ጠፍቷል")
         put("where is the airport", "የአውሮፕላን ማረፊያ የት ነው?")
         put("i want to book a hotel", "ሆቴል መያዝ እፈልጋለሁ")
         put("where can i find a taxi", "ታክሲ የት አገኛለሁ?")
         put("i love you", "እወድሻለሁ / እወድሃለሁ")
         put("i miss you", "ናፍቀሽኛል / ናፍቀኸኛል")
-        put("my love", "የኔ ፍቅር / ውዴ")
-        put("my world", "የኔ አለም")
-        put("my beautiful", "የኔ ቆንጆ")
-        put("my heart", "ልቤ")
-        put("i love you so much", "በጣም ነው የምወድህ")
+        put("my love", "የኔ ፍቅር")
         put("i can't live without you", "ያለ አንተ መኖር አልችልም")
-        put("you are my happiness", "ደስታዬ ነህ / ነሽ")
+        put("you are my happiness", "ደስታዬ ነህ")
         put("i love your smile", "ፈገግታህ ደስ ይለኛል")
-        put("my precious", "የኔ ውድ")
-        put("my honey", "የኔ ማር")
         put("you are my life", "ህይወቴ ነህ")
-        put("meeting", "ስብሰባ")
-        put("contract", "ውል")
-        put("profit", "ትርፍ")
-        put("loss", "ኪሳራ")
-        put("doctor", "ዶክተር")
-        put("hospital", "ሆስፒታል")
-        put("pharmacy", "ፋርማሲ")
-        put("medicine", "መድሃኒት")
-        put("passport", "ፓስፖርት")
-        put("visa", "ቪዛ")
-        put("ticket", "ትኬት")
-        put("airport", "አውሮፕላን ማረፊያ")
-        put("hotel", "ሆቴል")
-        put("taxi", "ታክሲ")
-        put("stop", "ቁም")
-        put("money", "ገንዘብ")
-        put("food", "ምግብ")
-        put("water", "ውሃ")
-        put("friend", "ጓደኛ")
-        put("time", "ሰዓት")
+
+        put("ስብሰባው መቼ ነው", "When is the meeting?")
+        put("ውል መፈረም እፈልጋለሁ", "I want to sign a contract.")
+        put("ዋጋው ስንት ነው", "What is the price?")
+        put("እባክህ ደረሰኝ ስጠኝ", "Please give me a receipt.")
+        put("አሞኛል ዶክተር ጥራ", "I am sick, call a doctor.")
+        put("ራስ ምታት አለብኝ", "I have a headache.")
+        put("ትኩሳት አለብኝ", "I have a fever.")
+        put("መንገድ ጠፋኝ እባክህ እርዳኝ", "I am lost, please help me.")
+        put("ቪዛ ማግኘት እፈልጋለሁ", "I want to get a visa.")
+        put("የአውሮፕላን ትኬት ስንት ነው", "How much is the flight ticket?")
+        put("ሻንጣዬ ጠፍቷል", "My luggage is lost.")
+        put("እንደምን ነህ", "How are you?")
+        put("ደህና ነኝ", "I am fine")
+        put("ምን አዲስ ነገር አለ", "What is new?")
+        put("እወድሃለሁ", "I love you")
+        put("እወድሻለሁ", "I love you")
+        put("ናፍቀኸኛል", "I miss you")
+        put("ናፍቀሽኛል", "I miss you")
+        put("የኔ ፍቅር", "My love")
+        put("በጣም ነው የምወድህ", "I love you so much")
+        put("ደስታዬ ነህ", "You are my happiness")
+        put("ደስታዬ ነሽ", "You are my happiness")
+        put("ፈገግታሽ ደስ ይለኛል", "I love your smile")
+        put("የኔ ማር", "My honey")
+        put("ነገ እንገናኝ", "See you tomorrow")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Dynamic UI Scaffolding ለቋንቋ መምረጫ
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(Color.parseColor("#121212"))
-            setPadding(50, 50, 50, 50) // [FIXED HERE] padding ስህተት ተስተካክሏል
+            setPadding(50, 50, 50, 50)
         }
 
         val titleView = TextView(this).apply {
-            text = "🎙️ Call Translator Pro\n(100% Offline Mode)"
+            text = "🎙️ Call Translator Pro\n(Optimized 100 Words)"
             textSize = 22f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
@@ -194,7 +166,6 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(titleView)
 
-        // 🔘 ቁልፍ 1: English to Amharic
         val btnEngToAmh = Button(this).apply {
             text = "🇺🇸 ENG ➔ 🇪🇹 AMH (የእንግሊዝኛ ድምፅ)"
             setBackgroundColor(Color.parseColor("#FF9800"))
@@ -203,7 +174,6 @@ class MainActivity : Activity() {
             setPadding(30, 40, 30, 40)
         }
         
-        // 🔘 ቁልፍ 2: Amharic to English
         val btnAmhToEng = Button(this).apply {
             text = "🇪🇹 AMH ➔ 🇺🇸 ENG (የአማርኛ ድምፅ)"
             setBackgroundColor(Color.parseColor("#4CAF50"))
@@ -215,7 +185,6 @@ class MainActivity : Activity() {
             layoutParams = params
         }
 
-        // 🔘 ቁልፍ 3: የአማርኛ ጥቅል ማውረጃ (Voice Package Downloader)
         val btnDownloadModel = Button(this).apply {
             text = "📥 የአማርኛ Offline ጥቅል መጫኛ"
             setBackgroundColor(Color.parseColor("#2196F3"))
@@ -254,11 +223,10 @@ class MainActivity : Activity() {
         }
         try {
             startActivity(intent)
-            Toast.makeText(this, "⚠️ Offline Speech Recognition ውስጥ ገብተው 'አማርኛ'ን ያውርዱ!", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "⚠️ Offline Speech Recognition -> All ውስጥ ገብተው 'አማርኛ'ን ያውርዱ!", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             val backupIntent = Intent(Settings.ACTION_SETTINGS)
             startActivity(backupIntent)
-            Toast.makeText(this, "Settings -> Language -> Voice Settings ውስጥ ያውርዱ", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -270,9 +238,6 @@ class MainActivity : Activity() {
         showNotification()
         setupOverlay()
         startListeningLoop()
-        
-        val modeText = if (translationMode == 1) "English to Amharic" else "Amharic to English"
-        Toast.makeText(this, "🚀 ሞድ: $modeText ተነስቷል!", Toast.LENGTH_SHORT).show()
     }
 
     private fun showNotification() {
@@ -419,7 +384,6 @@ class MainActivity : Activity() {
                 overlayTextView?.text = "🇺🇸 ENG: $rawInput\n🇪🇹 አማርኛ: $translatedText"
             }
 
-            // ውጤቱ ለ 7 ሰከንድ እንዲቆይ ማድረጊያ
             mainHandler.postDelayed({
                 isShowingResult = false 
                 restartListening()
@@ -428,7 +392,7 @@ class MainActivity : Activity() {
         } else {
             isShowingResult = true
             overlayTextView?.setTextColor(Color.parseColor("#FF5252"))
-            overlayTextView?.text = "🎙️ ግብዓት: $rawInput\n⚠️ [ይህ ቃል በ 300 ቃላት ጥቅል ውስጥ የለም]"
+            overlayTextView?.text = "🎙️ ግብዓት: $rawInput\n⚠️ [ይህ ቃል በ 100 ቃላት ጥቅል ውስጥ የለም]"
             
             mainHandler.postDelayed({
                 isShowingResult = false
