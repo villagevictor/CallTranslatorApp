@@ -34,8 +34,10 @@ class MainActivity : Activity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isListening = false
     
-    // 🎛️ የሁለትዮሽ ከመስመር ውጭ አዳማጭ መቀያየሪያ (True = አማርኛ ያዳምጣል, False = እንግሊዝኛ ያዳምጣል)
-    private var listenAmharicToggle = true
+    // 🎛️ የሰርጥ መቀያየሪያ (True = አማርኛ ያዳምጣል, False = እንግሊዝኛ ያዳምጣል)
+    // ስልክህ ላይ የእንግሊዝኛ ጥቅል ብቻ ስላለ መጀመሪያ በእንግሊዝኛ (False) እንዲነሳ እናደርገዋለን
+    private var listenAmharicToggle = false
+    private var isShowingResult = false // ትርጉም ስክሪን ላይ መኖሩን ማረጋገጫ
 
     // 📖 የተመረጡ 300 ከመስመር ውጭ (Offline) የሁለትዮሽ መዝገበ-ቃላት ጥቅል
     private val offlineDictionary = LinkedHashMap<String, String>().apply {
@@ -127,7 +129,7 @@ class MainActivity : Activity() {
         put("please give me a receipt", "ደረሰኝ ስጠኝ እባክህ")
         put("i am sick", "አሞኛል")
         put("i have a headache", "ራስ ምታት አለብኝ")
-        put("i have a fever", "ትኩሳት አለብኝ")
+        put("i have a fever", "ትকুሳት አለብኝ")
         put("where is the pharmacy", "ፋርማሲው የት ነው?")
         put("call an ambulance", "አምቡላንስ ጥራ")
         put("where is my passport", "ፓስፖርቴ የት ነው?")
@@ -268,18 +270,20 @@ class MainActivity : Activity() {
         try { windowManager?.addView(overlayTextView, params) } catch (e: Exception) {}
     }
 
-    // 🔄 የተስተካከለ ባለሁለት ሰርጥ የድምፅ ማዳመጫ ሞተር (Dual-Engine Strict Offline)
     private fun startListeningLoop() {
         if (!isListening) return
+        
+        // 🛑 ትርጉም ስክሪን ላይ ካለ አዲሱን ማዳመጫ ለተወሰነ ጊዜ ያቆማል
+        if (isShowingResult) return 
+
         mainHandler.post {
             try {
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
                 recognitionIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true) // ፍፁም ከመስመር ውጭ ማስገደጃ
+                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true) 
                     
-                    // 🎛️ መቀያየሪያውን መሠረት በማድረግ ለየብቻው ማዳመጥ
                     if (listenAmharicToggle) {
                         putExtra(RecognizerIntent.EXTRA_LANGUAGE, "am-ET")
                         putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "am-ET")
@@ -291,18 +295,19 @@ class MainActivity : Activity() {
 
                 speechRecognizer?.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) {
-                        // የትኛውን ቋንቋ እያደመጠ እንደሆነ በካርዱ ላይ በትንሹ ፍንጭ ይሰጣል
-                        val langLabel = if (listenAmharicToggle) "🇪🇹 አማርኛ" else "🇺🇸 English"
-                        overlayTextView?.text = "✨ ለመተርጎም ዝግጁ ነው... ($langLabel)"
+                        if (!isShowingResult) {
+                            val langLabel = if (listenAmharicToggle) "🇪🇹 አማርኛ" else "🇺🇸 English"
+                            overlayTextView?.text = "✨ ለመተርጎም ዝግጁ ነው... ($langLabel)"
+                            overlayTextView?.setTextColor(Color.parseColor("#4CAF50"))
+                        }
                     }
                     override fun onBeginningOfSpeech() {}
                     override fun onRmsChanged(rmsd: Float) {}
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
                     override fun onError(error: Int) {
-                        // ስህተት ሲመጣ ወይም ሰው ዝም ሲል ቋንቋውን ቀይሮ በኦፍላይን መስማቱን ይቀጥላል
-                        if (isListening) {
-                            listenAmharicToggle = !listenAmharicToggle // 🔄 ሰርጡን ይቀይራል
+                        if (isListening && !isShowingResult) {
+                            listenAmharicToggle = !listenAmharicToggle 
                             mainHandler.postDelayed({ restartListening() }, 200)
                         }
                     }
@@ -311,16 +316,17 @@ class MainActivity : Activity() {
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
                             lookupTranslation(matches[0])
-                        }
-                        if (isListening) {
-                            listenAmharicToggle = !listenAmharicToggle // 🔄 ከትርጉም በኋላ ወደ ቀጣዩ ቋንቋ መዞር
-                            restartListening()
+                        } else {
+                            if (isListening && !isShowingResult) {
+                                listenAmharicToggle = !listenAmharicToggle
+                                restartListening()
+                            }
                         }
                     }
 
                     override fun onPartialResults(partialResults: Bundle?) {
                         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
+                        if (!matches.isNullOrEmpty() && !isShowingResult) {
                             overlayTextView?.text = "🎙️ ሰማሁት: ${matches[0]}"
                             overlayTextView?.setTextColor(Color.parseColor("#FF9800"))
                         }
@@ -329,7 +335,7 @@ class MainActivity : Activity() {
                 })
                 speechRecognizer?.startListening(recognitionIntent)
             } catch (e: Exception) {
-                if (isListening) mainHandler.postDelayed({ restartListening() }, 800)
+                if (isListening && !isShowingResult) mainHandler.postDelayed({ restartListening() }, 800)
             }
         }
     }
@@ -357,20 +363,34 @@ class MainActivity : Activity() {
         }
 
         if (translatedText.isNotEmpty()) {
+            isShowingResult = true // 🔒 ፅሁፉ እንዳይጠፋ ስክሪኑን ይቆልፋል
+            try { speechRecognizer?.destroy() } catch (e: Exception) {}
+
             overlayTextView?.setTextColor(Color.parseColor("#4CAF50"))
             if (matchedKey.matches("^[\\u1200-\\u137F\\s,?.!]+$".toRegex())) {
                 overlayTextView?.text = "🇪🇹 አማርኛ: $rawInput\n🇺🇸 ENG: $translatedText"
             } else {
                 overlayTextView?.text = "🇺🇸 ENG: $rawInput\n🇪🇹 አማርኛ: $translatedText"
             }
+
+            // ⏱️ [CRITICAL FIX] ውጤቱ በስክሪን ሰከንድ ሳይጠፋ ለ 7 ሰከንድ ሙሉ እንዲቆይ ማድረጊያ
+            mainHandler.postDelayed({
+                isShowingResult = false // 🔓 ቆልፉን ይከፍታል
+                listenAmharicToggle = !listenAmharicToggle
+                restartListening()
+            }, 7000) 
+
         } else {
-            overlayTextView?.setTextColor(Color.parseColor("#FF5252"))
-            overlayTextView?.text = "🎙️ ግብዓት: $rawInput\n⚠️ [ትርጉም አልተገኘም]"
+            // ትርጉም ካልተገኘ ወዲያው ማዳመጡን ይቀጥላል
+            if (isListening) {
+                listenAmharicToggle = !listenAmharicToggle
+                restartListening()
+            }
         }
     }
 
     private fun restartListening() {
-        if (!isListening) return
+        if (!isListening || isShowingResult) return
         try { speechRecognizer?.destroy(); startListeningLoop() } catch (e: Exception) {}
     }
 
