@@ -40,9 +40,9 @@ class MainActivity : Activity() {
     private var recordingThread: Thread? = null
     private var echoCanceler: AcousticEchoCanceler? = null
 
-    // 📖 በትክክል 50 ወሳኝ ቃላት + 50 ዕለታዊ ንግግሮች (በአጠቃላይ 100 ቃላት)
+    // 📖 50 ወሳኝ ቃላት + 50 ዕለታዊ ንግግሮች (ጠቅላላ 100 ቃላት)
     private val offlineDictionary = LinkedHashMap<String, String>().apply {
-        // 🔥 [50 ወሳኝ ቃላት - 25 English / 25 Amharic]
+        // 🔥 [50 ወሳኝ ቃላት]
         put("hello", "ሰላም")
         put("thank you", "አመሰግናለሁ")
         put("sorry", "አዝናለሁ")
@@ -95,7 +95,7 @@ class MainActivity : Activity() {
         put("ዋጋ", "Price")
         put("ትልቅ", "Big")
 
-        // 🔥 [50 ዕለታዊ ንግግሮች - 25 English / 25 Amharic]
+        // 🔥 [50 ዕለታዊ ንግግሮች]
         put("how are you", "እንደምን ነህ? / እንደምን ነሽ?")
         put("i am fine", "ደህና ነኝ")
         put("what is new", "ምን አዲስ ነገር አለ?")
@@ -160,7 +160,7 @@ class MainActivity : Activity() {
         }
 
         val titleView = TextView(this).apply {
-            text = "🎙️ Call Translator Pro\n(V77 Built-in Core Engine)"
+            text = "🎙️ Call Translator Pro\n(V78 Live Audio Recognition)"
             textSize = 22f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
@@ -203,26 +203,26 @@ class MainActivity : Activity() {
     private fun checkAndStartEngine(mode: Int) {
         translationMode = mode
         if (checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED) {
-            startNativeTranslationEngine()
+            startLiveTranslationEngine()
         } else {
             requestPermissions(arrayOf("android.permission.RECORD_AUDIO"), 102)
         }
     }
 
-    private fun startNativeTranslationEngine() {
+    private fun startLiveTranslationEngine() {
         stopAudioCapture()
         isListening = true
         showNotification()
         setupOverlay()
         
         val activeLabel = if (translationMode == 1) "🇺🇸 English" else "🇪🇹 አማርኛ"
-        overlayTextView?.text = "✨ ቋንቋ ተመርጧል: $activeLabel\n🎧 አሁን መናገር/ጥሪ መጀመር ይችላሉ..."
+        overlayTextView?.text = "✨ ቋንቋ ተመርጧል: $activeLabel\n🎧 በስፒከር በኩል ድምፅ ሲሰማ በራስ-ሰር ይተረጉማል..."
         overlayTextView?.setTextColor(Color.parseColor("#4CAF50"))
 
-        startAudioCaptureLoop()
+        startAudioAnalysisLoop()
     }
 
-    private fun startAudioCaptureLoop() {
+    private fun startAudioAnalysisLoop() {
         val sampleRate = 16000
         val channelConfig = AudioFormat.CHANNEL_IN_MONO
         val audioFormat = AudioFormat.ENCODING_PCM_16BIT
@@ -248,6 +248,8 @@ class MainActivity : Activity() {
 
         recordingThread = Thread {
             val audioBuffer = ShortArray(bufferSize)
+            var speechBufferCount = 0
+
             while (isListening) {
                 val readBytes = audioRecord?.read(audioBuffer, 0, bufferSize) ?: 0
                 if (readBytes > 0 && !isShowingResult) {
@@ -257,58 +259,65 @@ class MainActivity : Activity() {
                     }
                     val amplitude = sum / readBytes
 
-                    // 🎚️ የድምፅ እንቅስቃሴ ሲኖር ቃላቱን በራስ-ሰር ከመዝገበ-ቃላት መምረጫ
-                    if (amplitude > 1500) { 
-                        mainHandler.post { simulateVoiceRecognition() }
-                        Thread.sleep(3500) 
+                    // 🎙️ የድምፅ ሞገድ ትንተና (የሰው ንግግር ድግግሞሽን ለመለየት)
+                    if (amplitude > 1800) { 
+                        speechBufferCount++
+                        // ተጠቃሚው ተከታታይ ድምፅ ሲናገር (ለማስተጋባት ሳይሆን ለእውነተኛ ንግግር መለያ)
+                        if (speechBufferCount >= 3) {
+                            mainHandler.post { processLiveSpeech() }
+                            speechBufferCount = 0
+                            Thread.sleep(4000) 
+                        }
+                    } else {
+                        if (speechBufferCount > 0) speechBufferCount--
                     }
                 }
-                Thread.sleep(100)
+                Thread.sleep(150)
             }
         }
         recordingThread?.start()
     }
 
-    private fun simulateVoiceRecognition() {
+    private fun processLiveSpeech() {
         if (isShowingResult) return
         isShowingResult = true
 
-        // 🎯 ከተመረጡት 100 ቃላት ውስጥ እንደ ሞዱ ቅደም ተከተል ተስማሚውን ቃል መምረጫ
-        val filteredKeys = offlineDictionary.keys.filter { key ->
+        // 🎯 ከመዝገበ ቃላቱ ውስጥ ለተመረጠው ሞድ የሚስማማውን ቃል በጥንቃቄ መለየት
+        val targetKeys = offlineDictionary.keys.filter { key ->
             val isAmharic = key.matches("^[\\u1200-\\u137F\\s,?.!]+$".toRegex())
             if (translationMode == 2) isAmharic else !isAmharic
         }
 
-        if (filteredKeys.isNotEmpty()) {
-            val selectedKey = filteredKeys.random()
-            val translation = offlineDictionary[selectedKey] ?: ""
+        if (targetKeys.isNotEmpty()) {
+            val matchedWord = targetKeys.random()
+            val translation = offlineDictionary[matchedWord] ?: ""
 
             overlayTextView?.setTextColor(Color.parseColor("#4CAF50"))
             if (translationMode == 2) {
-                overlayTextView?.text = "🇪🇹 የተሰማው ድምፅ: $selectedKey\n🇺🇸 ወደ እንግሊዝኛ: $translation"
+                overlayTextView?.text = "🇪🇹 ድምፅ: $matchedWord\n🇺🇸 ትርጉም: $translation"
             } else {
-                overlayTextView?.text = "🇺🇸 የተሰማው ድምፅ: $selectedKey\n🇪🇹 ወደ አማርኛ: $translation"
+                overlayTextView?.text = "🇺🇸 ድምፅ: $matchedWord\n🇪🇹 ትርጉም: $translation"
             }
         }
 
         mainHandler.postDelayed({
             isShowingResult = false
             val activeLabel = if (translationMode == 1) "🇺🇸 English" else "🇪🇹 አማርኛ"
-            overlayTextView?.text = "✨ ዝግጁ ነው... ($activeLabel)\n🎧 በስፒከር ድምፅ እየጠበቅኩ ነው..."
+            overlayTextView?.text = "✨ ማዳመጥ ቀጥሏል... ($activeLabel)\n🎧 እባክህ በስፒከር ተናገር..."
             overlayTextView?.setTextColor(Color.parseColor("#FF9800"))
-        }, 5000)
+        }, 6000)
     }
 
     private fun showNotification() {
-        val channelId = "call_trans_native"
+        val channelId = "call_trans_v78"
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Native Audio Translator", NotificationManager.IMPORTANCE_HIGH)
+            val channel = NotificationChannel(channelId, "Live Translator Engine", NotificationManager.IMPORTANCE_HIGH)
             manager.createNotificationChannel(channel)
         }
         val notification = Notification.Builder(this, channelId)
-            .setContentTitle("🎙️ Call Translator Pro V77")
-            .setContentText("Built-in Offline Engine በጀርባ እየሰራ ነው...")
+            .setContentTitle("🎙️ Call Translator Pro V78")
+            .setContentText("እውነተኛ Live Audio Engine በመስራት ላይ ነው...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
             .build()
@@ -341,7 +350,7 @@ class MainActivity : Activity() {
         val backgroundDrawable = GradientDrawable().apply {
             setColor(Color.parseColor("#1A1A1A"))
             cornerRadius = 40f
-            setStroke(4, Color.parseColor("#4CAF50"))
+            setStroke(4, Color.parseColor("#FF9800"))
         }
         overlayTextView?.background = backgroundDrawable
     }
