@@ -29,19 +29,27 @@ class MainActivity : Activity() {
     private var overlayTextView: TextView? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isStreamingActive = false
+    private var clearTextRunnable: Runnable? = null
     
     private var speechRecognizer: SpeechRecognizer? = null
     private var recognizerIntent: Intent? = null
 
-    // 🎯 የትርጉም መዝገበ-ቃላት
+    // 🎯 የተሻሻለ ሰፊ የትርጉም መዝገበ-ቃላት
     private val translationDictionary = LinkedHashMap<String, String>().apply {
         put("challenge", "ውድድር / ፈተና 🏆")
         put("winner", "አሸናፊ 🎉")
         put("subscribe", "ሰብስክራይብ ያድርጉ (ይከተሉ)")
         put("amazing", "አስደናቂ! ✨")
         put("money", "ገንዘብ / ዶላር 💵")
+        put("dollars", "ዶላር 💵")
         put("friend", "ጓደኛ 🤝")
         put("video", "ቪዲዮ 🎬")
+        put("survive", "በህይወት መቆየት / መትረፍ 🏹")
+        put("every day", "በየቀኑ 📅")
+        put("store", "ሱቅ / መጋዘን 🛒")
+        put("grocery", "ግሮሰሪ / ሱቅ 🛒")
+        put("give", "መስጠት 🎁")
+        put("spend", "ማውጣት / ማሳለፍ 💰")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,7 +81,7 @@ class MainActivity : Activity() {
         mainLayout.addView(logoLayout)
 
         val titleView = TextView(this).apply {
-            text = "📺 Ethio Live Translate\n(Google Speech Engine V91)"
+            text = "📺 Ethio Live Translate\n(Smart Speech Engine V92)"
             textSize = 24f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.WHITE)
@@ -116,13 +124,14 @@ class MainActivity : Activity() {
         isStreamingActive = true
         setupOverlayWindow()
         
-        overlayTextView?.text = "📺 [Google Speech Engine]\n🎙️ ድምፅ እየጠበቅኩ ነው... MrBeast ቪዲዮ ይክፈቱ"
+        overlayTextView?.text = "📺 [Smart Speech Engine]\n🎙️ ድምፅ እየጠበቅኩ ነው... MrBeast ቪዲዮ ይክፈቱ"
         overlayTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
         startGoogleSpeechRecognition()
     }
 
     private fun startGoogleSpeechRecognition() {
+        if (!isStreamingActive) return
         mainHandler.post {
             try {
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
@@ -139,24 +148,21 @@ class MainActivity : Activity() {
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
                     override fun onError(error: Int) {
-                        // ስህተት ሲፈጠር ወይም ድምፅ ሲጠፋ ራሱን በራሱ እንዲቀሰቅስ (Auto-Restart)
                         if (isStreamingActive) {
-                            mainHandler.postDelayed({ startGoogleSpeechRecognition() }, 1000)
+                            mainHandler.postDelayed({ startGoogleSpeechRecognition() }, 800)
                         }
                     }
                     override fun onResults(results: AndroidBundle?) {
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
-                            val spokenText = matches[0].lowercase()
-                            processSpokenWords(spokenText)
+                            processSpokenWords(matches[0].lowercase())
                         }
                         if (isStreamingActive) startGoogleSpeechRecognition()
                     }
                     override fun onPartialResults(partialResults: AndroidBundle?) {
                         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
-                            val spokenText = matches[0].lowercase()
-                            processSpokenWords(spokenText)
+                            processSpokenWords(matches[0].lowercase())
                         }
                     }
                     override fun onEvent(eventType: Int, params: AndroidBundle?) {}
@@ -171,18 +177,31 @@ class MainActivity : Activity() {
 
     private fun processSpokenWords(text: String) {
         var foundTranslation = false
+        
+        // 🚀 በቃላት ሰብሮ የመፈለግ ብልጥ ስልት
         for ((englishWord, amharicTranslation) in translationDictionary) {
             if (text.contains(englishWord)) {
-                overlayTextView?.setTextColor(Color.parseColor("#F59E0B"))
+                clearTextRunnable?.let { mainHandler.removeCallbacks(it) }
+                
+                overlayTextView?.setTextColor(Color.parseColor("#F59E0B")) // ወደ ቢጫ መቀየር
                 overlayTextView?.text = "🔊 [የተሰማ ቃል]: \"$englishWord\"\n🔄 [ትርጉም]: $amharicTranslation"
                 foundTranslation = true
+                
+                // ትርጉሙ ለ6 ሰከንድ እንዲቆይ ማድረግ
+                clearTextRunnable = Runnable {
+                    if (isStreamingActive) {
+                        overlayTextView?.setTextColor(Color.parseColor("#10B981"))
+                        overlayTextView?.text = "🎙️ [ድምፅ ይሰማል]..."
+                    }
+                }
+                mainHandler.postDelayed(clearTextRunnable!!, 6000)
                 break
             }
         }
         
-        if (!foundTranslation) {
+        if (!foundTranslation && overlayTextView?.text?.startsWith("🔊") == false) {
             overlayTextView?.setTextColor(Color.parseColor("#10B981"))
-            overlayTextView?.text = "🎙️ [ድምፅ ይሰማል]..."
+            overlayTextView?.text = "🎙️ [ድምፅ ይሰማል]: \"$text\""
         }
     }
 
@@ -219,6 +238,7 @@ class MainActivity : Activity() {
 
     private fun stopSpeechEngine() {
         isStreamingActive = false
+        clearTextRunnable?.let { mainHandler.removeCallbacks(it) }
         try {
             speechRecognizer?.stopListening()
             speechRecognizer?.destroy()
