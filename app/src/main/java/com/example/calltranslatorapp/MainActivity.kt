@@ -1,9 +1,6 @@
 package com.example.calltranslatorapp
 
 import android.app.Activity
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -25,7 +22,6 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
-import java.util.Locale
 import kotlin.math.abs
 
 class MainActivity : Activity() {
@@ -42,7 +38,6 @@ class MainActivity : Activity() {
 
     private val REQUEST_MEDIA_PROJECTION = 1012
 
-    // 📺 የዩቲዩብ እና ቲክቶክ ቪዲዮ ቃላት መዝገበ-ቃላት
     private val videoTranslationDictionary = LinkedHashMap<String, String>().apply {
         put("i gave away", "እኔ በነፃ ሰጠሁ...")
         put("last to leave", "ለመጨረሻ ጊዜ የለቀቀ ሰው...")
@@ -88,7 +83,7 @@ class MainActivity : Activity() {
         mainLayout.addView(logoLayout)
 
         val titleView = TextView(this).apply {
-            text = "📺 Ethio Live Translate\n(System Audio Engine V86)"
+            text = "📺 Ethio Live Translate\n(System Audio Engine V87)"
             textSize = 24f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.WHITE)
@@ -130,6 +125,14 @@ class MainActivity : Activity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == REQUEST_MEDIA_PROJECTION && resultCode == RESULT_OK && data != null) {
+            // 🚀 ክራሽ እንዳያደርግ የጀርባ አገልግሎቱን መጀመሪያ ማስጀመር
+            val serviceIntent = Intent(this, MediaCaptureService::class.java)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+
             mediaProjection = mediaProjectionManager?.getMediaProjection(resultCode, data)
             activateLiveVideoTranslator()
         }
@@ -138,7 +141,6 @@ class MainActivity : Activity() {
     private fun activateLiveVideoTranslator() {
         stopVideoAudioCapture()
         isStreamingActive = true
-        showNotification()
         setupOverlayWindow()
         
         overlayTextView?.text = "📺 [Ethio Live Translate]\n👉 አሁን MrBeast ቪዲዮ ይክፈቱ፣ ድምፅ ሲያገኝ ይተረጉማል..."
@@ -213,22 +215,6 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun showNotification() {
-        val channelId = "ethio_live_translate"
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Ethio Live Engine", NotificationManager.IMPORTANCE_HIGH)
-            manager.createNotificationChannel(channel)
-        }
-        val notification = Notification.Builder(this, channelId)
-            .setContentTitle("📺 Ethio Live Translate Pro")
-            .setContentText("የዩቲዩብ የጀርባ ሲስተም ኦዲዮ እየሰራ ነው...")
-            .setSmallIcon(android.R.drawable.ic_menu_slideshow)
-            .setOngoing(true)
-            .build()
-        manager.notify(2, notification)
-    }
-
     private fun setupOverlayWindow() {
         if (overlayTextView == null) {
             windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -270,6 +256,7 @@ class MainActivity : Activity() {
             videoAudioThread = null
             mediaProjection?.stop()
             mediaProjection = null
+            stopService(Intent(this, MediaCaptureService::class.java))
         } catch (e: Exception) {}
     }
 
