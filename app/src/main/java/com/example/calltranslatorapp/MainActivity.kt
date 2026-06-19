@@ -15,6 +15,7 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -41,7 +42,7 @@ class MainActivity : Activity() {
 
     private val REQUEST_MEDIA_PROJECTION = 1012
 
-    // 📺 እውነተኛ የ MrBeast እና የዩቲዩብ ቪዲዮ ቃላት መዝገበ-ቃላት
+    // 📺 የዩቲዩብ እና ቲክቶክ ቪዲዮ ቃላት መዝገበ-ቃላት
     private val videoTranslationDictionary = LinkedHashMap<String, String>().apply {
         put("i gave away", "እኔ በነፃ ሰጠሁ...")
         put("last to leave", "ለመጨረሻ ጊዜ የለቀቀ ሰው...")
@@ -87,7 +88,7 @@ class MainActivity : Activity() {
         mainLayout.addView(logoLayout)
 
         val titleView = TextView(this).apply {
-            text = "📺 Ethio Live Translate\n(System Audio Engine V85)"
+            text = "📺 Ethio Live Translate\n(System Audio Engine V86)"
             textSize = 24f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.WHITE)
@@ -110,7 +111,6 @@ class MainActivity : Activity() {
 
         btnStartVideoTranslator.setOnClickListener {
             if (checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED) {
-                // የስልኩን የውስጥ ኦዲዮ ለመቅዳት ፈቃድ መጠየቅ
                 mediaProjectionManager?.createScreenCaptureIntent()?.let { intent ->
                     startActivityForResult(intent, REQUEST_MEDIA_PROJECTION)
                 }
@@ -156,7 +156,6 @@ class MainActivity : Activity() {
         if (checkSelfPermission("android.permission.RECORD_AUDIO") != PackageManager.PERMISSION_GRANTED) return
 
         try {
-            // 🔊 በአንድሮይድ 10 እና ከዚያ በላይ የቪዲዮዎችን የውስጥ ድምፅ በቀጥታ ለመያዝ የተደረገ ማስተካከያ
             val builder = AudioRecord.Builder()
                 .setAudioFormat(AudioFormat.Builder()
                     .setChannelMask(channelConfig)
@@ -177,7 +176,6 @@ class MainActivity : Activity() {
             audioRecord = builder.build()
             audioRecord?.startRecording()
         } catch (e: Exception) {
-            // መሸጋገሪያ (Fallback to MIC if system block)
             audioRecord = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, channelConfig, audioFormat, bufferSize)
             audioRecord?.startRecording()
         }
@@ -193,7 +191,6 @@ class MainActivity : Activity() {
                     }
                     val currentAmplitude = sum / readBytes
 
-                    // 🔊 እውነተኛ የቪዲዮ ድምፅ (ከ 6000 በላይ ከፍተኛ ሲግናል) ሲመጣ ብቻ መዝገበ ቃላቱን ያነባል
                     if (currentAmplitude > 6000) { 
                         mainHandler.post { processRealVideoTranslation() }
                         Thread.sleep(5000) 
