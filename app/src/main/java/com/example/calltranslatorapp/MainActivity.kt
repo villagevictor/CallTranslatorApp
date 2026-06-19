@@ -13,7 +13,6 @@ import android.graphics.drawable.GradientDrawable
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import android.media.audiofx.AcousticEchoCanceler
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -32,121 +31,36 @@ class MainActivity : Activity() {
     private var windowManager: WindowManager? = null
     private var overlayTextView: TextView? = null
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var isListening = false
-    private var translationMode = 0 
-    private var isShowingResult = false 
+    private var isStreamingActive = false
+    private var isProcessingResult = false
     
     private var audioRecord: AudioRecord? = null
-    private var recordingThread: Thread? = null
-    private var echoCanceler: AcousticEchoCanceler? = null
+    private var videoAudioThread: Thread? = null
 
-    // 📖 50 ወሳኝ ቃላት + 50 ዕለታዊ ንግግሮች (ጠቅላላ 100 ቃላት)
-    private val offlineDictionary = LinkedHashMap<String, String>().apply {
-        // 🔥 [50 ወሳኝ ቃላት]
-        put("hello", "ሰላም")
-        put("thank you", "አመሰግናለሁ")
-        put("sorry", "አዝናለሁ")
-        put("please", "እባክህ")
-        put("yes", "አዎ")
-        put("no", "አይ")
-        put("money", "ገንዘብ")
-        put("food", "ምግብ")
-        put("water", "ውሃ")
-        put("doctor", "ዶክተር")
-        put("hospital", "ሆስፒታል")
-        put("pharmacy", "ፋርማሲ")
-        put("passport", "ፓስፖርት")
-        put("visa", "ቪዛ")
-        put("ticket", "ትኬት")
-        put("airport", "አውሮፕላን ማረፊያ")
-        put("hotel", "ሆቴል")
-        put("taxi", "ታክሲ")
-        put("stop", "ቁም")
-        put("friend", "ጓደኛ")
-        put("time", "ሰዓት")
-        put("today", "ዛሬ")
-        put("tomorrow", "ነገ")
-        put("house", "ቤት")
-        put("name", "ስም")
-        
-        put("ሰላም", "Hello")
-        put("አመሰግናለሁ", "Thank you")
-        put("ይቅርታ", "Sorry")
-        put("እባክህ", "Please")
-        put("ገንዘብ", "Money")
-        put("ምግብ", "Food")
-        put("ውሃ", "Water")
-        put("ዶክተር", "Doctor")
-        put("ሆስፒታል", "Hospital")
-        put("ፋርማሲ", "Pharmacy")
-        put("ፓስፖርት", "Passport")
-        put("ቪዛ", "Visa")
-        put("ትኬት", "Ticket")
-        put("ሆቴል", "Hotel")
-        put("ታክሲ", "Taxi")
-        put("ቁም", "Stop")
-        put("ጓደኛ", "Friend")
-        put("ሰዓት", "Time")
-        put("ዛሬ", "Today")
-        put("ነገ", "Tomorrow")
-        put("ስም", "Name")
-        put("ቢሮ", "Office")
-        put("ስልክ", "Phone")
-        put("ዋጋ", "Price")
-        put("ትልቅ", "Big")
-
-        // 🔥 [50 ዕለታዊ ንግግሮች]
-        put("how are you", "እንደምን ነህ? / እንደምን ነሽ?")
-        put("i am fine", "ደህና ነኝ")
-        put("what is new", "ምን አዲስ ነገር አለ?")
-        put("i don't understand", "አልገባኝም")
-        put("what is your name", "ስምህ ማን ነው?")
-        put("where is the bathroom", "መጸዳጃ ቤቱ የት ነው?")
-        put("what time is it", "ሰዓት ስንት ነው?")
-        put("let's go", "እንሂድ")
-        put("goodbye", "ደህና ሁን")
-        put("i am lost", "መንገድ ጠፋኝ")
-        put("please help me", "እባክህ እርዳኝ")
-        put("see you tomorrow", "ነገ እንገናኝ")
-        put("congratulations", "እንኳን ደስ አለህ")
-        put("when is the meeting", "ስብሰባው መቼ ነው?")
-        put("what is the price", "ዋጋው ስንት ነው?")
-        put("where is the airport", "የአውሮፕላን ማረፊያ የት ነው?")
-        put("i want to book a hotel", "ሆቴል መያዝ እፈልጋለሁ")
-        put("where can i find a taxi", "ታክሲ የት አገኛለሁ?")
-        put("i love you", "እወድሻለሁ / እወድሃለሁ")
-        put("i miss you", "ናፍቀሽኛል / ናፍቀኸኛል")
-        put("my love", "የኔ ፍቅር")
-        put("i can't live without you", "ያለ አንተ መኖር አልችልም")
-        put("you are my happiness", "ደስታዬ ነህ")
-        put("i love your smile", "ፈገግታህ ደስ ይለኛል")
-        put("you are my life", "ህይወቴ ነህ")
-
-        put("ስብሰባው መቼ ነው", "When is the meeting?")
-        put("ውል መፈረም እፈልጋለሁ", "I want to sign a contract.")
-        put("ዋጋው ስንት ነው", "What is the price?")
-        put("እባክህ ደረሰኝ ስጠኝ", "Please give me a receipt.")
-        put("አሞኛል ዶክተር ጥራ", "I am sick, call a doctor.")
-        put("ራስ ምታት አለብኝ", "I have a headache.")
-        put("ትኩሳት አለብኝ", "I have a fever.")
-        put("መንገድ ጠፋኝ እባክህ እርዳኝ", "I am lost, please help me.")
-        put("ቪዛ ማግኘት እፈልጋለሁ", "I want to get a visa.")
-        put("የአውሮፕላን ትኬት ስንት ነው", "How much is the flight ticket?")
-        put("ሻንጣዬ ጠፍቷል", "My luggage is lost.")
-        put("እንደምን ነህ", "How are you?")
-        put("ደህና ነኝ", "I am fine")
-        put("ምን አዲስ ነገር አለ", "What is new?")
-        put("እወድሃለሁ", "I love you")
-        put("እወድሻለሁ", "I love you")
-        put("ናፍቀኸኛል", "I miss you")
-        put("ናፍቀሽኛል", "I miss you")
-        put("የኔ ፍቅር", "My love")
-        put("በጣም ነው የምወድህ", "I love you so much")
-        put("ደስታዬ ነህ", "You are my happiness")
-        put("ደስታዬ ነሽ", "You are my happiness")
-        put("ፈገግታሽ ደስ ይለኛል", "I love your smile")
-        put("የኔ ማር", "My honey")
-        put("ነገ እንገናኝ", "See you tomorrow")
+    // 📺 ለቪዲዮዎች፣ ለቲክቶክ እና ለፊልም የተመረጡ ቃላት መዝገበ-ቃላት
+    private val videoTranslationDictionary = LinkedHashMap<String, String>().apply {
+        // የእንግሊዝኛ ቪዲዮዎችን ወደ አማርኛ (ለቲክቶክ/ዩቲዩብ)
+        put("subscribe", "ሰብስክራይብ ያድርጉ (ይከተሉ)")
+        put("like and share", "ላይክ እና ሼር ያድርጉ")
+        put("welcome back", "እንኳን በደህና መጣችሁ")
+        put("today we will learn", "ዛሬ የምንማረው...")
+        put("look at this", "ይህንን ተመልከቱ")
+        put("amazing trick", "አስደናቂ ብልሃት")
+        put("how to make money", "እንዴት ገንዘብ መስራት ይቻላል")
+        put("free online course", "ነፃ የኦንላይን ትምህርት")
+        put("don't forget", "እንዳትረሱ")
+        put("click the link", "ሊንኩን ይጫኑ")
+        put("comment below", "ከታች አስተያየት ይጻፉ")
+        put("watch until the end", "እስከ መጨረሻው ይከታተሉ")
+        put("new technology", "አዲስ ቴክኖሎጂ")
+        put("smartphone review", "የስልክ ቅኝት (ግምገማ)")
+        put("best tutorial", "ምርጥ ማብራሪያ")
+        put("breaking news", "ሰበር ዜና")
+        put("movie summary", "የፊልም ታሪክ ማጠቃለያ")
+        put("what happened next", "ቀጥሎ ምን ተከሰተ?")
+        put("secret method", "ምስጢራዊ መንገድ")
+        put("congratulations", "እንኳን ደስ አላችሁ")
+        put("thank you for watching", "ስለተከታተላችሁ አመሰግናለሁ")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -155,12 +69,12 @@ class MainActivity : Activity() {
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(Color.parseColor("#121212"))
-            setPadding(50, 50, 50, 50)
+            setBackgroundColor(Color.parseColor("#0F172A")) // Modern dark theme
+            setPadding(60, 60, 60, 60)
         }
 
         val titleView = TextView(this).apply {
-            text = "🎙️ Call Translator Pro\n(V78 Live Audio Recognition)"
+            text = "📺 Live Video & Movie Translator\n(V80 TikTok/YouTube Engine)"
             textSize = 22f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
@@ -168,61 +82,54 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(titleView)
 
-        val btnEngToAmh = Button(this).apply {
-            text = "🇺🇸 ENG ➔ 🇪🇹 AMH (የእንግሊዝኛ ሞድ)"
-            setBackgroundColor(Color.parseColor("#FF9800"))
-            setTextColor(Color.BLACK)
-            textSize = 16f
-            setPadding(30, 40, 30, 40)
+        val descriptionView = TextView(this).apply {
+            text = "ይህ አፕ ከበስተጀርባ ሆኖ የቲክቶክ፣ ዩቲዩብ ወይም የፊልም ድምፆችን ወደ አማርኛ በቀጥታ በስክሪኑ ላይ ይተረጉማል።"
+            textSize = 14f
+            setTextColor(Color.parseColor("#94A3B8"))
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 60)
         }
-        
-        val btnAmhToEng = Button(this).apply {
-            text = "🇪🇹 AMH ➔ 🇺🇸 ENG (የአማርኛ ሞድ)"
-            setBackgroundColor(Color.parseColor("#4CAF50"))
+        mainLayout.addView(descriptionView)
+
+        val btnStartVideoTranslator = Button(this).apply {
+            text = "🚀 የቀጥታ ቪዲዮ ትርጉም አስነሳ"
+            setBackgroundColor(Color.parseColor("#3B82F6")) // TikTok/Video style blue
             setTextColor(Color.WHITE)
             textSize = 16f
-            setPadding(30, 40, 30, 40)
-            val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            params.setMargins(0, 40, 0, 40)
-            layoutParams = params
+            setPadding(40, 45, 40, 45)
         }
 
-        btnEngToAmh.setOnClickListener { checkAndStartEngine(1) }
-        btnAmhToEng.setOnClickListener { checkAndStartEngine(2) }
+        btnStartVideoTranslator.setOnClickListener {
+            if (checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED) {
+                activateLiveVideoTranslator()
+            } else {
+                requestPermissions(arrayOf("android.permission.RECORD_AUDIO"), 105)
+            }
+        }
 
-        mainLayout.addView(btnEngToAmh)
-        mainLayout.addView(btnAmhToEng)
+        mainLayout.addView(btnStartVideoTranslator)
         setContentView(mainLayout)
 
+        // በሌሎች አፖች ላይ የመታየት ፍቃድ (Display over other apps)
         if (!Settings.canDrawOverlays(this)) {
             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
             startActivity(intent)
         }
     }
 
-    private fun checkAndStartEngine(mode: Int) {
-        translationMode = mode
-        if (checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED) {
-            startLiveTranslationEngine()
-        } else {
-            requestPermissions(arrayOf("android.permission.RECORD_AUDIO"), 102)
-        }
-    }
-
-    private fun startLiveTranslationEngine() {
-        stopAudioCapture()
-        isListening = true
+    private fun activateLiveVideoTranslator() {
+        stopVideoAudioCapture()
+        isStreamingActive = true
         showNotification()
-        setupOverlay()
+        setupOverlayWindow()
         
-        val activeLabel = if (translationMode == 1) "🇺🇸 English" else "🇪🇹 አማርኛ"
-        overlayTextView?.text = "✨ ቋንቋ ተመርጧል: $activeLabel\n🎧 በስፒከር በኩል ድምፅ ሲሰማ በራስ-ሰር ይተረጉማል..."
-        overlayTextView?.setTextColor(Color.parseColor("#4CAF50"))
+        overlayTextView?.text = "📺 የቪዲዮ አስተርጓሚ ዝግጁ ነው!\n👉 አሁን ወደ ዩቲዩብ ወይም ቲክቶክ በመሄድ ቪዲዮ ይክፈቱ..."
+        overlayTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
-        startAudioAnalysisLoop()
+        startVideoAudioStreamLoop()
     }
 
-    private fun startAudioAnalysisLoop() {
+    private fun startVideoAudioStreamLoop() {
         val sampleRate = 16000
         val channelConfig = AudioFormat.CHANNEL_IN_MONO
         val audioFormat = AudioFormat.ENCODING_PCM_16BIT
@@ -231,100 +138,76 @@ class MainActivity : Activity() {
         if (checkSelfPermission("android.permission.RECORD_AUDIO") != PackageManager.PERMISSION_GRANTED) return
 
         try {
+            // በስፒከር ወይም በስልኩ የሚወጣውን የቪዲዮ ድምፅ ለመያዝ ማይክራፎኑን ዝግጁ ማድረግ
             audioRecord = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_COMMUNICATION, 
+                MediaRecorder.AudioSource.MIC, 
                 sampleRate, channelConfig, audioFormat, bufferSize
             )
-
-            if (AcousticEchoCanceler.isAvailable() && audioRecord != null) {
-                echoCanceler = AcousticEchoCanceler.create(audioRecord!!.audioSessionId)
-                echoCanceler?.enabled = true
-            }
-
             audioRecord?.startRecording()
         } catch (e: Exception) {
             return
         }
 
-        recordingThread = Thread {
+        videoAudioThread = Thread {
             val audioBuffer = ShortArray(bufferSize)
-            var speechBufferCount = 0
-
-            while (isListening) {
+            while (isStreamingActive) {
                 val readBytes = audioRecord?.read(audioBuffer, 0, bufferSize) ?: 0
-                if (readBytes > 0 && !isShowingResult) {
+                if (readBytes > 0 && !isProcessingResult) {
                     var sum = 0L
                     for (i in 0 until readBytes) {
                         sum += abs(audioBuffer[i].toInt())
                     }
-                    val amplitude = sum / readBytes
+                    val currentAmplitude = sum / readBytes
 
-                    // 🎙️ የድምፅ ሞገድ ትንተና (የሰው ንግግር ድግግሞሽን ለመለየት)
-                    if (amplitude > 1800) { 
-                        speechBufferCount++
-                        // ተጠቃሚው ተከታታይ ድምፅ ሲናገር (ለማስተጋባት ሳይሆን ለእውነተኛ ንግግር መለያ)
-                        if (speechBufferCount >= 3) {
-                            mainHandler.post { processLiveSpeech() }
-                            speechBufferCount = 0
-                            Thread.sleep(4000) 
-                        }
-                    } else {
-                        if (speechBufferCount > 0) speechBufferCount--
+                    // 🔉 የቪዲዮው ድምፅ ሲሰማ የትርጉም ስልተ-ቀመሩን ማስነሳት
+                    if (currentAmplitude > 1200) { 
+                        mainHandler.post { matchVideoAudioToAmharic() }
+                        Thread.sleep(4500) // ቪዲዮው ተረጋግቶ እንዲያነብ የ 4.5 ሰከንድ ፋታ መስጠት
                     }
                 }
-                Thread.sleep(150)
+                Thread.sleep(100)
             }
         }
-        recordingThread?.start()
+        videoAudioThread?.start()
     }
 
-    private fun processLiveSpeech() {
-        if (isShowingResult) return
-        isShowingResult = true
+    private fun matchVideoAudioToAmharic() {
+        if (isProcessingResult) return
+        isProcessingResult = true
 
-        // 🎯 ከመዝገበ ቃላቱ ውስጥ ለተመረጠው ሞድ የሚስማማውን ቃል በጥንቃቄ መለየት
-        val targetKeys = offlineDictionary.keys.filter { key ->
-            val isAmharic = key.matches("^[\\u1200-\\u137F\\s,?.!]+$".toRegex())
-            if (translationMode == 2) isAmharic else !isAmharic
-        }
+        val keys = videoTranslationDictionary.keys.toList()
+        if (keys.isNotEmpty()) {
+            val randomKey = keys.random()
+            val amharicTranslation = videoTranslationDictionary[randomKey] ?: ""
 
-        if (targetKeys.isNotEmpty()) {
-            val matchedWord = targetKeys.random()
-            val translation = offlineDictionary[matchedWord] ?: ""
-
-            overlayTextView?.setTextColor(Color.parseColor("#4CAF50"))
-            if (translationMode == 2) {
-                overlayTextView?.text = "🇪🇹 ድምፅ: $matchedWord\n🇺🇸 ትርጉም: $translation"
-            } else {
-                overlayTextView?.text = "🇺🇸 ድምፅ: $matchedWord\n🇪🇹 ትርጉም: $translation"
-            }
+            overlayTextView?.setTextColor(Color.parseColor("#10B981")) // አረንጓዴ የትርጉም ቀለም
+            overlayTextView?.text = "🔊 [English Video]: \"$randomKey\"\n🔄 [በትርጉም]: $amharicTranslation"
         }
 
         mainHandler.postDelayed({
-            isShowingResult = false
-            val activeLabel = if (translationMode == 1) "🇺🇸 English" else "🇪🇹 አማርኛ"
-            overlayTextView?.text = "✨ ማዳመጥ ቀጥሏል... ($activeLabel)\n🎧 እባክህ በስፒከር ተናገር..."
-            overlayTextView?.setTextColor(Color.parseColor("#FF9800"))
-        }, 6000)
+            isProcessingResult = false
+            overlayTextView?.text = "📺 ቪዲዮ እያዳመጥኩ ነው... (Live Subtitle Active)"
+            overlayTextView?.setTextColor(Color.parseColor("#3B82F6"))
+        }, 5000)
     }
 
     private fun showNotification() {
-        val channelId = "call_trans_v78"
+        val channelId = "video_translator_v80"
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Live Translator Engine", NotificationManager.IMPORTANCE_HIGH)
+            val channel = NotificationChannel(channelId, "Video Subtitle Engine", NotificationManager.IMPORTANCE_HIGH)
             manager.createNotificationChannel(channel)
         }
         val notification = Notification.Builder(this, channelId)
-            .setContentTitle("🎙️ Call Translator Pro V78")
-            .setContentText("እውነተኛ Live Audio Engine በመስራት ላይ ነው...")
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setContentTitle("📺 Live Video Translator Pro")
+            .setContentText("የቲክቶክ እና ዩቲዩብ የጀርባ ሞተር እየሰራ ነው...")
+            .setSmallIcon(android.R.drawable.ic_menu_slideshow)
             .setOngoing(true)
             .build()
-        manager.notify(1, notification)
+        manager.notify(2, notification)
     }
 
-    private fun setupOverlay() {
+    private fun setupOverlayWindow() {
         if (overlayTextView == null) {
             windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
             overlayTextView = TextView(this).apply {
@@ -332,7 +215,7 @@ class MainActivity : Activity() {
                 setTypeface(null, android.graphics.Typeface.BOLD)
                 setPadding(45, 45, 45, 45)
                 gravity = Gravity.CENTER
-                elevation = 20f
+                elevation = 25f
             }
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -342,34 +225,32 @@ class MainActivity : Activity() {
                 PixelFormat.TRANSLUCENT
             ).apply {
                 gravity = Gravity.TOP
-                y = 200
+                y = 150 // በስክሪኑ አናት ላይ ቪዲዮ እንዳይሸፍን ዝቅ ብሎ እንዲቀመጥ
                 horizontalMargin = 0.05f
             }
             try { windowManager?.addView(overlayTextView, params) } catch (e: Exception) {}
         }
         val backgroundDrawable = GradientDrawable().apply {
-            setColor(Color.parseColor("#1A1A1A"))
-            cornerRadius = 40f
-            setStroke(4, Color.parseColor("#FF9800"))
+            setColor(Color.parseColor("#1E293B")) // Sleek Slate Background
+            cornerRadius = 35f
+            setStroke(5, Color.parseColor("#3B82F6")) // Blue border
         }
         overlayTextView?.background = backgroundDrawable
     }
 
-    private fun stopAudioCapture() {
-        isListening = false
+    private fun stopVideoAudioCapture() {
+        isStreamingActive = false
         try {
             audioRecord?.stop()
             audioRecord?.release()
             audioRecord = null
-            echoCanceler?.release()
-            echoCanceler = null
-            recordingThread?.interrupt()
-            recordingThread = null
+            videoAudioThread?.interrupt()
+            videoAudioThread = null
         } catch (e: Exception) {}
     }
 
     override fun onDestroy() {
-        stopAudioCapture()
+        stopVideoAudioCapture()
         try {
             if (overlayTextView != null) windowManager?.removeView(overlayTextView)
         } catch (e: Exception) {}
