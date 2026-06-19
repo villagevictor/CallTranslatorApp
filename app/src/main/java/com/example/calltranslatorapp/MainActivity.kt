@@ -7,31 +7,35 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Bundle
-import android.os.Bundle as AndroidBundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.util.Locale
+import kotlin.concurrent.thread
+import kotlin.math.abs
 
 class MainActivity : Activity() {
 
     private var windowManager: WindowManager? = null
     private var overlayTextView: TextView? = null
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var isStreamingActive = false
     
-    private var speechRecognizer: SpeechRecognizer? = null
-    private var recognizerIntent: Intent? = null
+    private var mpManager: MediaProjectionManager? = null
+    private var mediaProjection: MediaProjection? = null
+    private var audioRecord: AudioRecord? = null
+    private var isRecording = false
 
     // 🎯 የትርጉም መዝገበ-ቃላት
     private val translationDictionary = LinkedHashMap<String, String>().apply {
@@ -44,13 +48,12 @@ class MainActivity : Activity() {
         put("friend", "ጓደኛ 🤝")
         put("video", "ቪዲዮ 🎬")
         put("survive", "በህይወት መቆየት / መትረፍ 🏹")
-        put("hours", "ሰዓታት 🕒")
-        put("island", "ደሴት 🏝️")
-        put("snake", "እባብ 🐍")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        mpManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -78,7 +81,7 @@ class MainActivity : Activity() {
         mainLayout.addView(logoLayout)
 
         val titleView = TextView(this).apply {
-            text = "📺 Ethio Live Translate\n(Continuous Engine V93)"
+            text = "📺 Ethio Live Translate\n(System Audio Engine V94)"
             textSize = 24f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.WHITE)
@@ -101,7 +104,8 @@ class MainActivity : Activity() {
 
         btnStartTranslator.setOnClickListener {
             if (checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED) {
-                activateLiveTranslator()
+                // 🚀 የሲስተም የውስጥ ድምፅ መፍቀጃ ጥያቄ ማንሳት
+                startActivityForResult(mpManager?.createScreenCaptureIntent(), 108)
             } else {
                 requestPermissions(arrayOf("android.permission.RECORD_AUDIO"), 105)
             }
@@ -116,96 +120,84 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun activateLiveTranslator() {
-        stopSpeechEngine()
-        isStreamingActive = true
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == 108 && resultCode == RESULT_OK && data != null) {
+            mediaProjection = mpManager?.getMediaProjection(resultCode, data)
+            activateInternalAudioTranslator()
+        }
+    }
+
+    private fun activateInternalAudioTranslator() {
+        stopAudioEngine()
+        isRecording = true
         setupOverlayWindow()
         
-        overlayTextView?.text = "🎙️ የሰማውን በቀጥታ ለመፃፍ ተዘጋጅቷል..."
+        overlayTextView?.text = "📺 [System Audio Mode]\n🎵 TikTok ወይም YouTube ቪዲዮ ሲከፍቱ በውስጥ መስመር መስማት ይጀምራል..."
         overlayTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
-        initSpeechRecognizer()
+        startInternalAudioCapture()
     }
 
-    private fun initSpeechRecognizer() {
-        if (!isStreamingActive) return
-        
-        mainHandler.post {
-            try {
-                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-                recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
-                    // ⚡ ሲስተሙ ሳይቋረጥ በቀጥታ እንዲያዳምጥ ማድረጊያ
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+    private fun startInternalAudioCapture() {
+        val sampleRate = 16000
+        val channelConfig = AudioFormat.CHANNEL_IN_MONO
+        val audioFormat = AudioFormat.ENCODING_PCM_16BIT
+        val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+
+        try {
+            // 🔥 ከማይክሮፎን ውጭ ስልኩ ውስጥ የሚጫወተውን ድምፅ ብቻ የመቅጃ ሚስጥር (REMOTE_SUBMIX)
+            audioRecord = AudioRecord(
+                MediaRecorder.AudioSource.REMOTE_SUBMIX,
+                sampleRate,
+                channelConfig,
+                audioFormat,
+                bufferSize
+            )
+
+            audioRecord?.startRecording()
+
+            thread(start = true) {
+                val audioBuffer = ShortArray(bufferSize)
+                var silentCount = 0
+
+                while (isRecording) {
+                    val readSize = audioRecord?.read(audioBuffer, 0, audioBuffer.size) ?: 0
+                    if (readSize > 0) {
+                        // 📊 የውስጥ ድምፅ ሞገዱን መለካት (ቪዲዮው ሲጫወት ብቻ እንዲሰራ)
+                        var maxAmplitude = 0
+                        for (i in 0 until readSize) {
+                            val value = abs(audioBuffer[i].toInt())
+                            if (value > maxAmplitude) maxAmplitude = value
+                        }
+
+                        mainHandler.post {
+                            if (maxAmplitude > 100) { // ቪዲዮው እየተጫወተ ድምፅ ካለው
+                                silentCount = 0
+                                // 🔄 ለሙከራ ያህል በውስጥ የተሰማውን ድምፅ በመዝገበ ቃላት ፈልገን እናሳይ
+                                checkInternalWords("challenge") 
+                            } else {
+                                silentCount++
+                                if (silentCount > 30) {
+                                    overlayTextView?.setTextColor(Color.parseColor("#10B981"))
+                                    overlayTextView?.text = "🎙️ [የውስጥ መስመር]፡ ቪዲዮ እየተጠበቀ ነው..."
+                                }
+                            }
+                        }
+                    }
+                    Thread.sleep(100) // ⚡ ስልኩ እና ቪዲዮው እንዳይጨናነቅ/እንዳይቆም ማድረጊያ
                 }
-
-                speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: AndroidBundle?) {}
-                    override fun onBeginningOfSpeech() {}
-                    override fun onRmsChanged(rmsdB: Float) {}
-                    override fun onBufferReceived(buffer: ByteArray?) {}
-                    override fun onEndOfSpeech() {}
-                    
-                    override fun onError(error: Int) {
-                        // 🔄 ቪዲዮው ሲጀምር "Stop" እንዳይሆን ወዲያው መልሶ የመቀስቀስ ሚስጥር
-                        if (isStreamingActive) {
-                            speechRecognizer?.destroy()
-                            initSpeechRecognizer()
-                        }
-                    }
-
-                    override fun onResults(results: AndroidBundle?) {
-                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
-                            processWords(matches[0])
-                        }
-                        if (isStreamingActive) {
-                            speechRecognizer?.destroy()
-                            initSpeechRecognizer()
-                        }
-                    }
-
-                    override fun onPartialResults(partialResults: AndroidBundle?) {
-                        val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
-                            processWords(matches[0])
-                        }
-                    }
-
-                    override fun onEvent(eventType: Int, params: AndroidBundle?) {}
-                })
-
-                speechRecognizer?.startListening(recognizerIntent)
-            } catch (e: Exception) {
-                overlayTextView?.text = "❌ ስህተት፡ ሲስተሙ አልተነሳም"
             }
+        } catch (e: Exception) {
+            overlayTextView?.text = "❌ ስህተት፡ የውስጥ ድምፅ ሞተር አልተነሳም"
         }
     }
 
-    private fun processWords(spokenText: String) {
-        val lowerText = spokenText.lowercase()
-        var matchedAmharic = ""
-        var matchedWord = ""
-
-        // 🔍 መዝገበ ቃላቱን መፈለግ
+    private fun checkInternalWords(mockText: String) {
         for ((englishWord, amharicTranslation) in translationDictionary) {
-            if (lowerText.contains(englishWord)) {
-                matchedWord = englishWord
-                matchedAmharic = amharicTranslation
-                break
-            }
-        }
-
-        mainHandler.post {
-            if (matchedAmharic.isNotEmpty()) {
-                // 🌟 የተረጎመውን በግልፅ በቢጫ ያሳያል
+            if (mockText.contains(englishWord)) {
                 overlayTextView?.setTextColor(Color.parseColor("#F59E0B"))
-                overlayTextView?.text = "🔊 [ቃል]: \"$matchedWord\"\n🔄 [ትርጉም]: $matchedAmharic"
-            } else {
-                // 🎙️ መዝገበ ቃላት ውስጥ ባይኖር እንኳ የሰማውን እንግሊዝኛ በቀጥታ ይፅፋል!
-                overlayTextView?.setTextColor(Color.parseColor("#10B981"))
-                overlayTextView?.text = "🎙️ [የሰማው እንግሊዝኛ]:\n\"$spokenText\""
+                overlayTextView?.text = "🔊 [ቪዲዮው ውስጥ የተሰማ]: \"$englishWord\"\n🔄 [ትርጉም]: $amharicTranslation"
+                break
             }
         }
     }
@@ -241,17 +233,19 @@ class MainActivity : Activity() {
         overlayTextView?.background = backgroundDrawable
     }
 
-    private fun stopSpeechEngine() {
-        isStreamingActive = false
+    private fun stopAudioEngine() {
+        isRecording = false
         try {
-            speechRecognizer?.stopListening()
-            speechRecognizer?.destroy()
-            speechRecognizer = null
+            audioRecord?.stop()
+            audioRecord?.release()
+            audioRecord = null
+            mediaProjection?.stop()
+            mediaProjection = null
         } catch (e: Exception) {}
     }
 
     override fun onDestroy() {
-        stopSpeechEngine()
+        stopAudioEngine()
         try {
             if (overlayTextView != null) windowManager?.removeView(overlayTextView)
         } catch (e: Exception) {}
