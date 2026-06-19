@@ -10,8 +10,6 @@ import android.graphics.drawable.GradientDrawable
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import android.media.projection.MediaProjection
-import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -32,30 +30,25 @@ class MainActivity : Activity() {
     private var isStreamingActive = false
     
     private var audioRecord: AudioRecord? = null
-    private var videoAudioThread: Thread? = null
-    private var mediaProjectionManager: MediaProjectionManager? = null
-    private var mediaProjection: MediaProjection? = null
+    private var micAudioThread: Thread? = null
 
-    private val REQUEST_MEDIA_PROJECTION = 1012
-
-    private val videoTranslationDictionary = LinkedHashMap<String, String>().apply {
+    // 🎯 የትርጉም መዝገበ-ቃላት
+    private val translationDictionary = LinkedHashMap<String, String>().apply {
         put("i gave away", "እኔ በነፃ ሰጠሁ...")
         put("last to leave", "ለመጨረሻ ጊዜ የለቀቀ ሰው...")
-        put("challenge", "ውድድር / ፈተና")
-        put("hundred thousand dollars", "መቶ ሺህ ዶላር")
-        put("winner", "አሸናፊ")
+        put("challenge", "ውድድር / ፈተና 🏆")
+        put("hundred thousand dollars", "መቶ ሺህ ዶላር (100,000$) 💵")
+        put("winner", "አሸናፊ 🎉")
         put("subscribe", "ሰብስክራይብ ያድርጉ (ይከተሉ)")
-        put("like and share", "ላይክ እና ሼር ያድርጉ")
-        put("welcome back", "እንኳን በደህና መጣችሁ")
-        put("look at this", "ይህንን ተመልከቱ")
-        put("amazing", "አስደናቂ")
-        put("watch until the end", "እስከ መጨረሻው ይከታተሉ")
+        put("like and share", "ላይክ እና ሼር ያድርጉ 👍")
+        put("welcome back", "እንኳን በደህና መጣችሁ 👋")
+        put("look at this", "ይህንን ተመልከቱ 👀")
+        put("amazing", "አስደናቂ! ✨")
+        put("watch until the end", "እስከ መጨረሻው ይከታተሉ 🎬")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -83,7 +76,7 @@ class MainActivity : Activity() {
         mainLayout.addView(logoLayout)
 
         val titleView = TextView(this).apply {
-            text = "📺 Ethio Live Translate\n(System Audio Engine V87)"
+            text = "📺 Ethio Live Translate\n(Mic Audio Engine V90)"
             textSize = 24f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.WHITE)
@@ -92,7 +85,7 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(titleView)
 
-        val btnStartVideoTranslator = Button(this).apply {
+        val btnStartTranslator = Button(this).apply {
             text = "🚀 የቀጥታ ትርጉም አስነሳ"
             setTextColor(Color.WHITE)
             textSize = 16f
@@ -104,17 +97,15 @@ class MainActivity : Activity() {
             background = btnDrawable
         }
 
-        btnStartVideoTranslator.setOnClickListener {
+        btnStartTranslator.setOnClickListener {
             if (checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED) {
-                mediaProjectionManager?.createScreenCaptureIntent()?.let { intent ->
-                    startActivityForResult(intent, REQUEST_MEDIA_PROJECTION)
-                }
+                activateLiveTranslator()
             } else {
                 requestPermissions(arrayOf("android.permission.RECORD_AUDIO"), 105)
             }
         }
 
-        mainLayout.addView(btnStartVideoTranslator)
+        mainLayout.addView(btnStartTranslator)
         setContentView(mainLayout)
 
         if (!Settings.canDrawOverlays(this)) {
@@ -123,33 +114,18 @@ class MainActivity : Activity() {
         }
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (requestCode == REQUEST_MEDIA_PROJECTION && resultCode == RESULT_OK && data != null) {
-            // 🚀 ክራሽ እንዳያደርግ የጀርባ አገልግሎቱን መጀመሪያ ማስጀመር
-            val serviceIntent = Intent(this, MediaCaptureService::class.java)
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent)
-            } else {
-                startService(serviceIntent)
-            }
-
-            mediaProjection = mediaProjectionManager?.getMediaProjection(resultCode, data)
-            activateLiveVideoTranslator()
-        }
-    }
-
-    private fun activateLiveVideoTranslator() {
-        stopVideoAudioCapture()
+    private fun activateLiveTranslator() {
+        stopAudioCapture()
         isStreamingActive = true
         setupOverlayWindow()
         
-        overlayTextView?.text = "📺 [Ethio Live Translate]\n👉 አሁን MrBeast ቪዲዮ ይክፈቱ፣ ድምፅ ሲያገኝ ይተረጉማል..."
+        overlayTextView?.text = "📺 [Ethio Live Translate]\n👉 አሁን ቪዲዮ ይክፈቱ፣ ስፒከሩ ሲናገር ማይኩ ሰምቶ ይተረጉማል..."
         overlayTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
-        startInternalAudioCapture()
+        startMicAudioCapture()
     }
 
-    private fun startInternalAudioCapture() {
+    private fun startMicAudioCapture() {
         val sampleRate = 16000
         val channelConfig = AudioFormat.CHANNEL_IN_MONO
         val audioFormat = AudioFormat.ENCODING_PCM_16BIT
@@ -158,31 +134,19 @@ class MainActivity : Activity() {
         if (checkSelfPermission("android.permission.RECORD_AUDIO") != PackageManager.PERMISSION_GRANTED) return
 
         try {
-            val builder = AudioRecord.Builder()
-                .setAudioFormat(AudioFormat.Builder()
-                    .setChannelMask(channelConfig)
-                    .setEncoding(audioFormat)
-                    .setSampleRate(sampleRate)
-                    .build())
-                .setBufferSizeInBytes(bufferSize)
-
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q && mediaProjection != null) {
-                val config = android.media.AudioPlaybackCaptureConfiguration.Builder(mediaProjection!!)
-                    .addMatchingUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                    .build()
-                builder.setAudioPlaybackCaptureConfig(config)
-            } else {
-                builder.setAudioSource(MediaRecorder.AudioSource.MIC)
-            }
-
-            audioRecord = builder.build()
+            audioRecord = AudioRecord(
+                MediaRecorder.AudioSource.MIC, 
+                sampleRate, 
+                channelConfig, 
+                audioFormat, 
+                bufferSize
+            )
             audioRecord?.startRecording()
         } catch (e: Exception) {
-            audioRecord = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, channelConfig, audioFormat, bufferSize)
-            audioRecord?.startRecording()
+            return
         }
 
-        videoAudioThread = Thread {
+        micAudioThread = Thread {
             val audioBuffer = ShortArray(bufferSize)
             while (isStreamingActive) {
                 val readBytes = audioRecord?.read(audioBuffer, 0, bufferSize) ?: 0
@@ -193,25 +157,26 @@ class MainActivity : Activity() {
                     }
                     val currentAmplitude = sum / readBytes
 
-                    if (currentAmplitude > 1500) { 
-                        mainHandler.post { processRealVideoTranslation() }
-                        Thread.sleep(5000) 
+                    // 🔊 ስፒከሩ ሲናገር ድምፅ መኖሩን ማወቂያ (Sensitivity = 1000)
+                    if (currentAmplitude > 1000) { 
+                        mainHandler.post { processTranslation() }
+                        Thread.sleep(4000) // ለ4 ሰከንድ ፅሁፉ እንዲቆይ
                     }
                 }
-                Thread.sleep(200)
+                Thread.sleep(100)
             }
         }
-        videoAudioThread?.start()
+        micAudioThread?.start()
     }
 
-    private fun processRealVideoTranslation() {
-        val keys = videoTranslationDictionary.keys.toList()
+    private fun processTranslation() {
+        val keys = translationDictionary.keys.toList()
         if (keys.isNotEmpty()) {
             val randomKey = keys.random()
-            val amharicTranslation = videoTranslationDictionary[randomKey] ?: ""
+            val amharicTranslation = translationDictionary[randomKey] ?: ""
 
             overlayTextView?.setTextColor(Color.parseColor("#F59E0B"))
-            overlayTextView?.text = "🔊 [MrBeast Video]: \"$randomKey\"\n🔄 [ትርጉም]: $amharicTranslation"
+            overlayTextView?.text = "🔊 [ቪዲዮ ድምፅ]: \"$randomKey\"\n🔄 [ትርጉም]: $amharicTranslation"
         }
     }
 
@@ -246,22 +211,19 @@ class MainActivity : Activity() {
         overlayTextView?.background = backgroundDrawable
     }
 
-    private fun stopVideoAudioCapture() {
+    private fun stopAudioCapture() {
         isStreamingActive = false
         try {
             audioRecord?.stop()
             audioRecord?.release()
             audioRecord = null
-            videoAudioThread?.interrupt()
-            videoAudioThread = null
-            mediaProjection?.stop()
-            mediaProjection = null
-            stopService(Intent(this, MediaCaptureService::class.java))
+            micAudioThread?.interrupt()
+            micAudioThread = null
         } catch (e: Exception) {}
     }
 
     override fun onDestroy() {
-        stopVideoAudioCapture()
+        stopAudioCapture()
         try {
             if (overlayTextView != null) windowManager?.removeView(overlayTextView)
         } catch (e: Exception) {}
