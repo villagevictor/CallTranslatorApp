@@ -29,12 +29,11 @@ class MainActivity : Activity() {
     private var overlayTextView: TextView? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isStreamingActive = false
-    private var clearTextRunnable: Runnable? = null
     
     private var speechRecognizer: SpeechRecognizer? = null
     private var recognizerIntent: Intent? = null
 
-    // 🎯 የተሻሻለ ሰፊ የትርጉም መዝገበ-ቃላት
+    // 🎯 የትርጉም መዝገበ-ቃላት
     private val translationDictionary = LinkedHashMap<String, String>().apply {
         put("challenge", "ውድድር / ፈተና 🏆")
         put("winner", "አሸናፊ 🎉")
@@ -45,11 +44,9 @@ class MainActivity : Activity() {
         put("friend", "ጓደኛ 🤝")
         put("video", "ቪዲዮ 🎬")
         put("survive", "በህይወት መቆየት / መትረፍ 🏹")
-        put("every day", "በየቀኑ 📅")
-        put("store", "ሱቅ / መጋዘን 🛒")
-        put("grocery", "ግሮሰሪ / ሱቅ 🛒")
-        put("give", "መስጠት 🎁")
-        put("spend", "ማውጣት / ማሳለፍ 💰")
+        put("hours", "ሰዓታት 🕒")
+        put("island", "ደሴት 🏝️")
+        put("snake", "እባብ 🐍")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,7 +78,7 @@ class MainActivity : Activity() {
         mainLayout.addView(logoLayout)
 
         val titleView = TextView(this).apply {
-            text = "📺 Ethio Live Translate\n(Smart Speech Engine V92)"
+            text = "📺 Ethio Live Translate\n(Continuous Engine V93)"
             textSize = 24f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.WHITE)
@@ -124,20 +121,22 @@ class MainActivity : Activity() {
         isStreamingActive = true
         setupOverlayWindow()
         
-        overlayTextView?.text = "📺 [Smart Speech Engine]\n🎙️ ድምፅ እየጠበቅኩ ነው... MrBeast ቪዲዮ ይክፈቱ"
+        overlayTextView?.text = "🎙️ የሰማውን በቀጥታ ለመፃፍ ተዘጋጅቷል..."
         overlayTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
-        startGoogleSpeechRecognition()
+        initSpeechRecognizer()
     }
 
-    private fun startGoogleSpeechRecognition() {
+    private fun initSpeechRecognizer() {
         if (!isStreamingActive) return
+        
         mainHandler.post {
             try {
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
                 recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
+                    // ⚡ ሲስተሙ ሳይቋረጥ በቀጥታ እንዲያዳምጥ ማድረጊያ
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 }
 
@@ -147,61 +146,67 @@ class MainActivity : Activity() {
                     override fun onRmsChanged(rmsdB: Float) {}
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
+                    
                     override fun onError(error: Int) {
+                        // 🔄 ቪዲዮው ሲጀምር "Stop" እንዳይሆን ወዲያው መልሶ የመቀስቀስ ሚስጥር
                         if (isStreamingActive) {
-                            mainHandler.postDelayed({ startGoogleSpeechRecognition() }, 800)
+                            speechRecognizer?.destroy()
+                            initSpeechRecognizer()
                         }
                     }
+
                     override fun onResults(results: AndroidBundle?) {
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
-                            processSpokenWords(matches[0].lowercase())
+                            processWords(matches[0])
                         }
-                        if (isStreamingActive) startGoogleSpeechRecognition()
+                        if (isStreamingActive) {
+                            speechRecognizer?.destroy()
+                            initSpeechRecognizer()
+                        }
                     }
+
                     override fun onPartialResults(partialResults: AndroidBundle?) {
                         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
-                            processSpokenWords(matches[0].lowercase())
+                            processWords(matches[0])
                         }
                     }
+
                     override fun onEvent(eventType: Int, params: AndroidBundle?) {}
                 })
 
                 speechRecognizer?.startListening(recognizerIntent)
             } catch (e: Exception) {
-                overlayTextView?.text = "❌ ስህተት፡ Google Speech አልተነሳም"
+                overlayTextView?.text = "❌ ስህተት፡ ሲስተሙ አልተነሳም"
             }
         }
     }
 
-    private fun processSpokenWords(text: String) {
-        var foundTranslation = false
-        
-        // 🚀 በቃላት ሰብሮ የመፈለግ ብልጥ ስልት
+    private fun processWords(spokenText: String) {
+        val lowerText = spokenText.lowercase()
+        var matchedAmharic = ""
+        var matchedWord = ""
+
+        // 🔍 መዝገበ ቃላቱን መፈለግ
         for ((englishWord, amharicTranslation) in translationDictionary) {
-            if (text.contains(englishWord)) {
-                clearTextRunnable?.let { mainHandler.removeCallbacks(it) }
-                
-                overlayTextView?.setTextColor(Color.parseColor("#F59E0B")) // ወደ ቢጫ መቀየር
-                overlayTextView?.text = "🔊 [የተሰማ ቃል]: \"$englishWord\"\n🔄 [ትርጉም]: $amharicTranslation"
-                foundTranslation = true
-                
-                // ትርጉሙ ለ6 ሰከንድ እንዲቆይ ማድረግ
-                clearTextRunnable = Runnable {
-                    if (isStreamingActive) {
-                        overlayTextView?.setTextColor(Color.parseColor("#10B981"))
-                        overlayTextView?.text = "🎙️ [ድምፅ ይሰማል]..."
-                    }
-                }
-                mainHandler.postDelayed(clearTextRunnable!!, 6000)
+            if (lowerText.contains(englishWord)) {
+                matchedWord = englishWord
+                matchedAmharic = amharicTranslation
                 break
             }
         }
-        
-        if (!foundTranslation && overlayTextView?.text?.startsWith("🔊") == false) {
-            overlayTextView?.setTextColor(Color.parseColor("#10B981"))
-            overlayTextView?.text = "🎙️ [ድምፅ ይሰማል]: \"$text\""
+
+        mainHandler.post {
+            if (matchedAmharic.isNotEmpty()) {
+                // 🌟 የተረጎመውን በግልፅ በቢጫ ያሳያል
+                overlayTextView?.setTextColor(Color.parseColor("#F59E0B"))
+                overlayTextView?.text = "🔊 [ቃል]: \"$matchedWord\"\n🔄 [ትርጉም]: $matchedAmharic"
+            } else {
+                // 🎙️ መዝገበ ቃላት ውስጥ ባይኖር እንኳ የሰማውን እንግሊዝኛ በቀጥታ ይፅፋል!
+                overlayTextView?.setTextColor(Color.parseColor("#10B981"))
+                overlayTextView?.text = "🎙️ [የሰማው እንግሊዝኛ]:\n\"$spokenText\""
+            }
         }
     }
 
@@ -238,7 +243,6 @@ class MainActivity : Activity() {
 
     private fun stopSpeechEngine() {
         isStreamingActive = false
-        clearTextRunnable?.let { mainHandler.removeCallbacks(it) }
         try {
             speechRecognizer?.stopListening()
             speechRecognizer?.destroy()
