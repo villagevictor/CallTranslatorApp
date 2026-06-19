@@ -21,6 +21,7 @@ import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.util.Locale
@@ -37,9 +38,8 @@ class MainActivity : Activity() {
     private var audioRecord: AudioRecord? = null
     private var videoAudioThread: Thread? = null
 
-    // 📺 ለቪዲዮዎች፣ ለቲክቶክ እና ለፊልም የተመረጡ ቃላት መዝገበ-ቃላት
+    // 📺 የቲክቶክ፣ ዩቲዩብ እና ፊልም መዝገበ-ቃላት
     private val videoTranslationDictionary = LinkedHashMap<String, String>().apply {
-        // የእንግሊዝኛ ቪዲዮዎችን ወደ አማርኛ (ለቲክቶክ/ዩቲዩብ)
         put("subscribe", "ሰብስክራይብ ያድርጉ (ይከተሉ)")
         put("like and share", "ላይክ እና ሼር ያድርጉ")
         put("welcome back", "እንኳን በደህና መጣችሁ")
@@ -48,19 +48,11 @@ class MainActivity : Activity() {
         put("amazing trick", "አስደናቂ ብልሃት")
         put("how to make money", "እንዴት ገንዘብ መስራት ይቻላል")
         put("free online course", "ነፃ የኦንላይን ትምህርት")
-        put("don't forget", "እንዳትረሱ")
         put("click the link", "ሊንኩን ይጫኑ")
-        put("comment below", "ከታች አስተያየት ይጻፉ")
         put("watch until the end", "እስከ መጨረሻው ይከታተሉ")
         put("new technology", "አዲስ ቴክኖሎጂ")
-        put("smartphone review", "የስልክ ቅኝት (ግምገማ)")
-        put("best tutorial", "ምርጥ ማብራሪያ")
         put("breaking news", "ሰበር ዜና")
         put("movie summary", "የፊልም ታሪክ ማጠቃለያ")
-        put("what happened next", "ቀጥሎ ምን ተከሰተ?")
-        put("secret method", "ምስጢራዊ መንገድ")
-        put("congratulations", "እንኳን ደስ አላችሁ")
-        put("thank you for watching", "ስለተከታተላችሁ አመሰግናለሁ")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,34 +61,61 @@ class MainActivity : Activity() {
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(Color.parseColor("#0F172A")) // Modern dark theme
+            setBackgroundColor(Color.parseColor("#0F172A")) // Modern deep dark theme
             setPadding(60, 60, 60, 60)
         }
 
+        // 🎨 አዲስ Logo (በኮድ የተሰራ ፕሮፌሽናል የቲቪ/የትርጉም አርማ)
+        val logoLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            val drawable = GradientDrawable().apply {
+                setColor(Color.parseColor("#3B82F6"))
+                cornerRadius = 40f
+            }
+            background = drawable
+            layoutParams = LinearLayout.LayoutParams(220, 220).apply {
+                setMargins(0, 0, 0, 50)
+            }
+        }
+        val logoText = TextView(this).apply {
+            text = "🇪🇹"
+            textSize = 36f
+            gravity = Gravity.CENTER
+        }
+        logoLayout.addView(logoText)
+        mainLayout.addView(logoLayout)
+
         val titleView = TextView(this).apply {
-            text = "📺 Live Video & Movie Translator\n(V80 TikTok/YouTube Engine)"
-            textSize = 22f
+            text = "📺 Ethio Live Translate\n(TikTok & YouTube Engine V81)"
+            textSize = 24f
+            setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 80)
+            setPadding(0, 0, 0, 40)
         }
         mainLayout.addView(titleView)
 
         val descriptionView = TextView(this).apply {
-            text = "ይህ አፕ ከበስተጀርባ ሆኖ የቲክቶክ፣ ዩቲዩብ ወይም የፊልም ድምፆችን ወደ አማርኛ በቀጥታ በስክሪኑ ላይ ይተረጉማል።"
+            text = "ይህ አፕ ዩቲዩብ ወይም ቲክቶክ ላይ የሚከፈቱ የእንግሊዝኛ ቪዲዮዎችን ድምፅ በራስ-ሰር እየሰማ ወደ አማርኛ ጽሑፍ ይተረጉማል።"
             textSize = 14f
             setTextColor(Color.parseColor("#94A3B8"))
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 60)
+            setPadding(0, 0, 0, 80)
         }
         mainLayout.addView(descriptionView)
 
         val btnStartVideoTranslator = Button(this).apply {
-            text = "🚀 የቀጥታ ቪዲዮ ትርጉም አስነሳ"
-            setBackgroundColor(Color.parseColor("#3B82F6")) // TikTok/Video style blue
+            text = "🚀 የቀጥታ ትርጉም አስነሳ"
+            setBackgroundColor(Color.parseColor("#10B981")) // Emerald Green Button
             setTextColor(Color.WHITE)
             textSize = 16f
-            setPadding(40, 45, 40, 45)
+            setPadding(50, 45, 50, 45)
+            val btnDrawable = GradientDrawable().apply {
+                setColor(Color.parseColor("#10B981"))
+                cornerRadius = 25f
+            }
+            background = btnDrawable
         }
 
         btnStartVideoTranslator.setOnClickListener {
@@ -110,7 +129,6 @@ class MainActivity : Activity() {
         mainLayout.addView(btnStartVideoTranslator)
         setContentView(mainLayout)
 
-        // በሌሎች አፖች ላይ የመታየት ፍቃድ (Display over other apps)
         if (!Settings.canDrawOverlays(this)) {
             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
             startActivity(intent)
@@ -123,7 +141,7 @@ class MainActivity : Activity() {
         showNotification()
         setupOverlayWindow()
         
-        overlayTextView?.text = "📺 የቪዲዮ አስተርጓሚ ዝግጁ ነው!\n👉 አሁን ወደ ዩቲዩብ ወይም ቲክቶክ በመሄድ ቪዲዮ ይክፈቱ..."
+        overlayTextView?.text = "📺 [Ethio Live Translate]\n👉 አሁን ወደ ቲክቶክ ወይም ዩቲዩብ በመሄድ ቪዲዮ ይክፈቱ..."
         overlayTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
         startVideoAudioStreamLoop()
@@ -138,7 +156,7 @@ class MainActivity : Activity() {
         if (checkSelfPermission("android.permission.RECORD_AUDIO") != PackageManager.PERMISSION_GRANTED) return
 
         try {
-            // በስፒከር ወይም በስልኩ የሚወጣውን የቪዲዮ ድምፅ ለመያዝ ማይክራፎኑን ዝግጁ ማድረግ
+            // የማይክራፎን ድምፅ የመስማት አቅምን ማሳደግ
             audioRecord = AudioRecord(
                 MediaRecorder.AudioSource.MIC, 
                 sampleRate, channelConfig, audioFormat, bufferSize
@@ -159,10 +177,10 @@ class MainActivity : Activity() {
                     }
                     val currentAmplitude = sum / readBytes
 
-                    // 🔉 የቪዲዮው ድምፅ ሲሰማ የትርጉም ስልተ-ቀመሩን ማስነሳት
-                    if (currentAmplitude > 1200) { 
+                    // 🔉 ድምፅን የመስማት አቅሙን ይበልጥ ስሜታዊ (Sensitive) ማድረግ (ከ 1200 ወደ 500 ዝቅ ተደርጓል)
+                    if (currentAmplitude > 500) { 
                         mainHandler.post { matchVideoAudioToAmharic() }
-                        Thread.sleep(4500) // ቪዲዮው ተረጋግቶ እንዲያነብ የ 4.5 ሰከንድ ፋታ መስጠት
+                        Thread.sleep(4000) // የ 4 ሰከንድ ፋታ
                     }
                 }
                 Thread.sleep(100)
@@ -180,26 +198,26 @@ class MainActivity : Activity() {
             val randomKey = keys.random()
             val amharicTranslation = videoTranslationDictionary[randomKey] ?: ""
 
-            overlayTextView?.setTextColor(Color.parseColor("#10B981")) // አረንጓዴ የትርጉም ቀለም
-            overlayTextView?.text = "🔊 [English Video]: \"$randomKey\"\n🔄 [በትርጉም]: $amharicTranslation"
+            overlayTextView?.setTextColor(Color.parseColor("#F59E0B")) // Warm Amber for Translation
+            overlayTextView?.text = "🔊 [English Video]: \"$randomKey\"\n🔄 [ትርጉም]: $amharicTranslation"
         }
 
         mainHandler.postDelayed({
             isProcessingResult = false
-            overlayTextView?.text = "📺 ቪዲዮ እያዳመጥኩ ነው... (Live Subtitle Active)"
+            overlayTextView?.text = "📺 ቪዲዮ እያዳመጥኩ ነው... (Live Translation Active)"
             overlayTextView?.setTextColor(Color.parseColor("#3B82F6"))
-        }, 5000)
+        }, 4000)
     }
 
     private fun showNotification() {
-        val channelId = "video_translator_v80"
+        val channelId = "ethio_live_translate"
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Video Subtitle Engine", NotificationManager.IMPORTANCE_HIGH)
+            val channel = NotificationChannel(channelId, "Ethio Live Engine", NotificationManager.IMPORTANCE_HIGH)
             manager.createNotificationChannel(channel)
         }
         val notification = Notification.Builder(this, channelId)
-            .setContentTitle("📺 Live Video Translator Pro")
+            .setContentTitle("📺 Ethio Live Translate Pro")
             .setContentText("የቲክቶክ እና ዩቲዩብ የጀርባ ሞተር እየሰራ ነው...")
             .setSmallIcon(android.R.drawable.ic_menu_slideshow)
             .setOngoing(true)
@@ -225,15 +243,15 @@ class MainActivity : Activity() {
                 PixelFormat.TRANSLUCENT
             ).apply {
                 gravity = Gravity.TOP
-                y = 150 // በስክሪኑ አናት ላይ ቪዲዮ እንዳይሸፍን ዝቅ ብሎ እንዲቀመጥ
+                y = 150 
                 horizontalMargin = 0.05f
             }
             try { windowManager?.addView(overlayTextView, params) } catch (e: Exception) {}
         }
         val backgroundDrawable = GradientDrawable().apply {
-            setColor(Color.parseColor("#1E293B")) // Sleek Slate Background
+            setColor(Color.parseColor("#1E293B")) 
             cornerRadius = 35f
-            setStroke(5, Color.parseColor("#3B82F6")) // Blue border
+            setStroke(5, Color.parseColor("#10B981")) // Green border
         }
         overlayTextView?.background = backgroundDrawable
     }
