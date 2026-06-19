@@ -193,7 +193,7 @@ class MainActivity : Activity() {
                     }
                     val currentAmplitude = sum / readBytes
 
-                    if (currentAmplitude > 6000) { 
+                    if (currentAmplitude > 1500) { 
                         mainHandler.post { processRealVideoTranslation() }
                         Thread.sleep(5000) 
                     }
