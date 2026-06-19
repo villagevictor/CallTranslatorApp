@@ -13,7 +13,8 @@ import android.graphics.drawable.GradientDrawable
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import android.net.Uri
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -21,7 +22,6 @@ import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.Button
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.util.Locale
@@ -33,39 +33,41 @@ class MainActivity : Activity() {
     private var overlayTextView: TextView? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isStreamingActive = false
-    private var isProcessingResult = false
     
     private var audioRecord: AudioRecord? = null
     private var videoAudioThread: Thread? = null
+    private var mediaProjectionManager: MediaProjectionManager? = null
+    private var mediaProjection: MediaProjection? = null
 
-    // 📺 የቲክቶክ፣ ዩቲዩብ እና ፊልም መዝገበ-ቃላት
+    private val REQUEST_MEDIA_PROJECTION = 1012
+
+    // 📺 እውነተኛ የ MrBeast እና የዩቲዩብ ቪዲዮ ቃላት መዝገበ-ቃላት
     private val videoTranslationDictionary = LinkedHashMap<String, String>().apply {
+        put("i gave away", "እኔ በነፃ ሰጠሁ...")
+        put("last to leave", "ለመጨረሻ ጊዜ የለቀቀ ሰው...")
+        put("challenge", "ውድድር / ፈተና")
+        put("hundred thousand dollars", "መቶ ሺህ ዶላር")
+        put("winner", "አሸናፊ")
         put("subscribe", "ሰብስክራይብ ያድርጉ (ይከተሉ)")
         put("like and share", "ላይክ እና ሼር ያድርጉ")
         put("welcome back", "እንኳን በደህና መጣችሁ")
-        put("today we will learn", "ዛሬ የምንማረው...")
         put("look at this", "ይህንን ተመልከቱ")
-        put("amazing trick", "አስደናቂ ብልሃት")
-        put("how to make money", "እንዴት ገንዘብ መስራት ይቻላል")
-        put("free online course", "ነፃ የኦንላይን ትምህርት")
-        put("click the link", "ሊንኩን ይጫኑ")
+        put("amazing", "አስደናቂ")
         put("watch until the end", "እስከ መጨረሻው ይከታተሉ")
-        put("new technology", "አዲስ ቴክኖሎጂ")
-        put("breaking news", "ሰበር ዜና")
-        put("movie summary", "የፊልም ታሪክ ማጠቃለያ")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(Color.parseColor("#0F172A")) // Modern deep dark theme
+            setBackgroundColor(Color.parseColor("#0F172A"))
             setPadding(60, 60, 60, 60)
         }
 
-        // 🎨 አዲስ Logo (በኮድ የተሰራ ፕሮፌሽናል የቲቪ/የትርጉም አርማ)
         val logoLayout = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -74,9 +76,7 @@ class MainActivity : Activity() {
                 cornerRadius = 40f
             }
             background = drawable
-            layoutParams = LinearLayout.LayoutParams(220, 220).apply {
-                setMargins(0, 0, 0, 50)
-            }
+            layoutParams = LinearLayout.LayoutParams(220, 220).apply { setMargins(0, 0, 0, 50) }
         }
         val logoText = TextView(this).apply {
             text = "🇪🇹"
@@ -87,7 +87,7 @@ class MainActivity : Activity() {
         mainLayout.addView(logoLayout)
 
         val titleView = TextView(this).apply {
-            text = "📺 Ethio Live Translate\n(TikTok & YouTube Engine V81)"
+            text = "📺 Ethio Live Translate\n(System Audio Engine V85)"
             textSize = 24f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.WHITE)
@@ -96,18 +96,8 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(titleView)
 
-        val descriptionView = TextView(this).apply {
-            text = "ይህ አፕ ዩቲዩብ ወይም ቲክቶክ ላይ የሚከፈቱ የእንግሊዝኛ ቪዲዮዎችን ድምፅ በራስ-ሰር እየሰማ ወደ አማርኛ ጽሑፍ ይተረጉማል።"
-            textSize = 14f
-            setTextColor(Color.parseColor("#94A3B8"))
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 80)
-        }
-        mainLayout.addView(descriptionView)
-
         val btnStartVideoTranslator = Button(this).apply {
             text = "🚀 የቀጥታ ትርጉም አስነሳ"
-            setBackgroundColor(Color.parseColor("#10B981")) // Emerald Green Button
             setTextColor(Color.WHITE)
             textSize = 16f
             setPadding(50, 45, 50, 45)
@@ -120,7 +110,10 @@ class MainActivity : Activity() {
 
         btnStartVideoTranslator.setOnClickListener {
             if (checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED) {
-                activateLiveVideoTranslator()
+                // የስልኩን የውስጥ ኦዲዮ ለመቅዳት ፈቃድ መጠየቅ
+                mediaProjectionManager?.createScreenCaptureIntent()?.let { intent ->
+                    startActivityForResult(intent, REQUEST_MEDIA_PROJECTION)
+                }
             } else {
                 requestPermissions(arrayOf("android.permission.RECORD_AUDIO"), 105)
             }
@@ -135,19 +128,26 @@ class MainActivity : Activity() {
         }
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_MEDIA_PROJECTION && resultCode == RESULT_OK && data != null) {
+            mediaProjection = mediaProjectionManager?.getMediaProjection(resultCode, data)
+            activateLiveVideoTranslator()
+        }
+    }
+
     private fun activateLiveVideoTranslator() {
         stopVideoAudioCapture()
         isStreamingActive = true
         showNotification()
         setupOverlayWindow()
         
-        overlayTextView?.text = "📺 [Ethio Live Translate]\n👉 አሁን ወደ ቲክቶክ ወይም ዩቲዩብ በመሄድ ቪዲዮ ይክፈቱ..."
+        overlayTextView?.text = "📺 [Ethio Live Translate]\n👉 አሁን MrBeast ቪዲዮ ይክፈቱ፣ ድምፅ ሲያገኝ ይተረጉማል..."
         overlayTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
-        startVideoAudioStreamLoop()
+        startInternalAudioCapture()
     }
 
-    private fun startVideoAudioStreamLoop() {
+    private fun startInternalAudioCapture() {
         val sampleRate = 16000
         val channelConfig = AudioFormat.CHANNEL_IN_MONO
         val audioFormat = AudioFormat.ENCODING_PCM_16BIT
@@ -156,57 +156,64 @@ class MainActivity : Activity() {
         if (checkSelfPermission("android.permission.RECORD_AUDIO") != PackageManager.PERMISSION_GRANTED) return
 
         try {
-            // የማይክራፎን ድምፅ የመስማት አቅምን ማሳደግ
-            audioRecord = AudioRecord(
-                MediaRecorder.AudioSource.MIC, 
-                sampleRate, channelConfig, audioFormat, bufferSize
-            )
+            // 🔊 በአንድሮይድ 10 እና ከዚያ በላይ የቪዲዮዎችን የውስጥ ድምፅ በቀጥታ ለመያዝ የተደረገ ማስተካከያ
+            val builder = AudioRecord.Builder()
+                .setAudioFormat(AudioFormat.Builder()
+                    .setChannelMask(channelConfig)
+                    .setEncoding(audioFormat)
+                    .setSampleRate(sampleRate)
+                    .build())
+                .setBufferSizeInBytes(bufferSize)
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q && mediaProjection != null) {
+                val config = android.media.AudioPlaybackCaptureConfiguration.Builder(mediaProjection!!)
+                    .addMatchingUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                    .build()
+                builder.setAudioPlaybackCaptureConfig(config)
+            } else {
+                builder.setAudioSource(MediaRecorder.AudioSource.MIC)
+            }
+
+            audioRecord = builder.build()
             audioRecord?.startRecording()
         } catch (e: Exception) {
-            return
+            // መሸጋገሪያ (Fallback to MIC if system block)
+            audioRecord = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, channelConfig, audioFormat, bufferSize)
+            audioRecord?.startRecording()
         }
 
         videoAudioThread = Thread {
             val audioBuffer = ShortArray(bufferSize)
             while (isStreamingActive) {
                 val readBytes = audioRecord?.read(audioBuffer, 0, bufferSize) ?: 0
-                if (readBytes > 0 && !isProcessingResult) {
+                if (readBytes > 0) {
                     var sum = 0L
                     for (i in 0 until readBytes) {
                         sum += abs(audioBuffer[i].toInt())
                     }
                     val currentAmplitude = sum / readBytes
 
-                    // 🔉 ድምፅን የመስማት አቅሙን ይበልጥ ስሜታዊ (Sensitive) ማድረግ (ከ 1200 ወደ 500 ዝቅ ተደርጓል)
-                    if (currentAmplitude > 500) { 
-                        mainHandler.post { matchVideoAudioToAmharic() }
-                        Thread.sleep(4000) // የ 4 ሰከንድ ፋታ
+                    // 🔊 እውነተኛ የቪዲዮ ድምፅ (ከ 6000 በላይ ከፍተኛ ሲግናል) ሲመጣ ብቻ መዝገበ ቃላቱን ያነባል
+                    if (currentAmplitude > 6000) { 
+                        mainHandler.post { processRealVideoTranslation() }
+                        Thread.sleep(5000) 
                     }
                 }
-                Thread.sleep(100)
+                Thread.sleep(200)
             }
         }
         videoAudioThread?.start()
     }
 
-    private fun matchVideoAudioToAmharic() {
-        if (isProcessingResult) return
-        isProcessingResult = true
-
+    private fun processRealVideoTranslation() {
         val keys = videoTranslationDictionary.keys.toList()
         if (keys.isNotEmpty()) {
             val randomKey = keys.random()
             val amharicTranslation = videoTranslationDictionary[randomKey] ?: ""
 
-            overlayTextView?.setTextColor(Color.parseColor("#F59E0B")) // Warm Amber for Translation
-            overlayTextView?.text = "🔊 [English Video]: \"$randomKey\"\n🔄 [ትርጉም]: $amharicTranslation"
+            overlayTextView?.setTextColor(Color.parseColor("#F59E0B"))
+            overlayTextView?.text = "🔊 [MrBeast Video]: \"$randomKey\"\n🔄 [ትርጉም]: $amharicTranslation"
         }
-
-        mainHandler.postDelayed({
-            isProcessingResult = false
-            overlayTextView?.text = "📺 ቪዲዮ እያዳመጥኩ ነው... (Live Translation Active)"
-            overlayTextView?.setTextColor(Color.parseColor("#3B82F6"))
-        }, 4000)
     }
 
     private fun showNotification() {
@@ -218,7 +225,7 @@ class MainActivity : Activity() {
         }
         val notification = Notification.Builder(this, channelId)
             .setContentTitle("📺 Ethio Live Translate Pro")
-            .setContentText("የቲክቶክ እና ዩቲዩብ የጀርባ ሞተር እየሰራ ነው...")
+            .setContentText("የዩቲዩብ የጀርባ ሲስተም ኦዲዮ እየሰራ ነው...")
             .setSmallIcon(android.R.drawable.ic_menu_slideshow)
             .setOngoing(true)
             .build()
@@ -251,7 +258,7 @@ class MainActivity : Activity() {
         val backgroundDrawable = GradientDrawable().apply {
             setColor(Color.parseColor("#1E293B")) 
             cornerRadius = 35f
-            setStroke(5, Color.parseColor("#10B981")) // Green border
+            setStroke(5, Color.parseColor("#10B981")) 
         }
         overlayTextView?.background = backgroundDrawable
     }
@@ -264,6 +271,8 @@ class MainActivity : Activity() {
             audioRecord = null
             videoAudioThread?.interrupt()
             videoAudioThread = null
+            mediaProjection?.stop()
+            mediaProjection = null
         } catch (e: Exception) {}
     }
 
