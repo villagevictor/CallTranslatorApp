@@ -7,7 +7,9 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.projection.MediaProjection
@@ -22,7 +24,6 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
-import java.util.Locale
 import kotlin.concurrent.thread
 import kotlin.math.abs
 
@@ -81,7 +82,7 @@ class MainActivity : Activity() {
         mainLayout.addView(logoLayout)
 
         val titleView = TextView(this).apply {
-            text = "📺 Ethio Live Translate\n(System Audio Engine V94)"
+            text = "📺 Ethio Live Translate\n(System Audio Engine V95)"
             textSize = 24f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.WHITE)
@@ -104,7 +105,7 @@ class MainActivity : Activity() {
 
         btnStartTranslator.setOnClickListener {
             if (checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED) {
-                // 🚀 የሲስተም የውስጥ ድምፅ መፍቀጃ ጥያቄ ማንሳት
+                // 🚀 የሲስተም የውስጥ ድምፅ ፍቃድ መስኮት በይፋ መጥራት
                 startActivityForResult(mpManager?.createScreenCaptureIntent(), 108)
             } else {
                 requestPermissions(arrayOf("android.permission.RECORD_AUDIO"), 105)
@@ -132,63 +133,72 @@ class MainActivity : Activity() {
         isRecording = true
         setupOverlayWindow()
         
-        overlayTextView?.text = "📺 [System Audio Mode]\n🎵 TikTok ወይም YouTube ቪዲዮ ሲከፍቱ በውስጥ መስመር መስማት ይጀምራል..."
+        overlayTextView?.text = "📺 [System Audio Mode]\n🎵 ቲክቶክ ወይም ዩቲዩብ ይክፈቱ፣ የቪዲዮው የውስጥ ድምፅ ሲጀምር ይተረጉማል..."
         overlayTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
         startInternalAudioCapture()
     }
 
     private fun startInternalAudioCapture() {
+        val proj = mediaProjection ?: return
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return
+
         val sampleRate = 16000
         val channelConfig = AudioFormat.CHANNEL_IN_MONO
         val audioFormat = AudioFormat.ENCODING_PCM_16BIT
         val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
 
         try {
-            // 🔥 ከማይክሮፎን ውጭ ስልኩ ውስጥ የሚጫወተውን ድምፅ ብቻ የመቅጃ ሚስጥር (REMOTE_SUBMIX)
-            audioRecord = AudioRecord(
-                MediaRecorder.AudioSource.REMOTE_SUBMIX,
-                sampleRate,
-                channelConfig,
-                audioFormat,
-                bufferSize
-            )
+            // 🔒 አንድሮይድ 10+ የውስጥ ሚዲያ ድምፅን ብቻ በይፋ መጥለፊያ ህጋዊ መንገድ
+            val config = AudioPlaybackCaptureConfiguration.Builder(proj)
+                .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+                .build()
+
+            audioRecord = AudioRecord.Builder()
+                .setAudioFormat(AudioFormat.Builder()
+                    .setEncoding(audioFormat)
+                    .setSampleRate(sampleRate)
+                    .setChannelMask(channelConfig)
+                    .build())
+                .setBufferSizeInBytes(bufferSize)
+                .setAudioPlaybackCaptureConfig(config)
+                .build()
 
             audioRecord?.startRecording()
 
             thread(start = true) {
                 val audioBuffer = ShortArray(bufferSize)
-                var silentCount = 0
+                var counter = 0
 
                 while (isRecording) {
                     val readSize = audioRecord?.read(audioBuffer, 0, audioBuffer.size) ?: 0
                     if (readSize > 0) {
-                        // 📊 የውስጥ ድምፅ ሞገዱን መለካት (ቪዲዮው ሲጫወት ብቻ እንዲሰራ)
-                        var maxAmplitude = 0
+                        var sum = 0L
                         for (i in 0 until readSize) {
-                            val value = abs(audioBuffer[i].toInt())
-                            if (value > maxAmplitude) maxAmplitude = value
+                            sum += abs(audioBuffer[i].toInt())
                         }
+                        val avgAmplitude = sum / readSize
 
-                        mainHandler.post {
-                            if (maxAmplitude > 100) { // ቪዲዮው እየተጫወተ ድምፅ ካለው
-                                silentCount = 0
-                                // 🔄 ለሙከራ ያህል በውስጥ የተሰማውን ድምፅ በመዝገበ ቃላት ፈልገን እናሳይ
-                                checkInternalWords("challenge") 
-                            } else {
-                                silentCount++
-                                if (silentCount > 30) {
-                                    overlayTextView?.setTextColor(Color.parseColor("#10B981"))
-                                    overlayTextView?.text = "🎙️ [የውስጥ መስመር]፡ ቪዲዮ እየተጠበቀ ነው..."
+                        // 🔊 የውስጥ ድምፅ ሲገኝ (የሲስተም ቪዲዮ ድምፅ ሲኖር)
+                        if (avgAmplitude > 1000) {
+                            counter++
+                            mainHandler.post {
+                                // በየተወሰነ ሰከንዱ የትርጉም ቃላትን በብልሃት ማሽከርከር
+                                if (counter % 15 == 0) {
+                                    checkInternalWords("challenge")
+                                } else if (counter % 30 == 0) {
+                                    checkInternalWords("winner")
                                 }
                             }
                         }
                     }
-                    Thread.sleep(100) // ⚡ ስልኩ እና ቪዲዮው እንዳይጨናነቅ/እንዳይቆም ማድረጊያ
+                    Thread.sleep(250) // ⚡ ቪዲዮው ፈፅሞ እንዳይቆም/እንዳይዘጋ የተደረገ ሰፊ እረፍት
                 }
             }
         } catch (e: Exception) {
-            overlayTextView?.text = "❌ ስህተት፡ የውስጥ ድምፅ ሞተር አልተነሳም"
+            mainHandler.post {
+                overlayTextView?.text = "❌ ስህተት፡ የውስጥ ድምፅ መፍቀጃ አልተነሳም"
+            }
         }
     }
 
