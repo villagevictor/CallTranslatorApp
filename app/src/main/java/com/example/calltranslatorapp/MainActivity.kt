@@ -5,21 +5,20 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Bundle
+import android.os.Bundle as AndroidBundle
 import android.os.Handler
 import android.os.Looper
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.view.Gravity
-import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.VideoView
-import kotlin.concurrent.thread
-import kotlin.math.abs
+import java.util.Locale
 
 class MainActivity : Activity() {
 
@@ -28,8 +27,9 @@ class MainActivity : Activity() {
     private var translationTextView: TextView? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     
-    private var audioRecord: AudioRecord? = null
-    private var isAnalyzing = false
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var recognizerIntent: Intent? = null
+    private var isVideoPlaying = false
 
     // 🎯 የትርጉም መዝገበ-ቃላት
     private val translationDictionary = LinkedHashMap<String, String>().apply {
@@ -53,7 +53,7 @@ class MainActivity : Activity() {
             setPadding(30, 30, 30, 30)
         }
 
-        // 📺 1. የቪዲዮ ማጫወቻ (ምስሉ በግልፅ እንዲታይ Layout ተስተካክሏል)
+        // 📺 1. የቪዲዮ ማጫወቻ መስኮት
         videoView = VideoView(this).apply {
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -64,7 +64,7 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(videoView)
 
-        // 📝 2. የሁኔታ መግለጫ ጽሑፍ
+        // 📝 2. የሁኔታ መግለጫ
         statusTextView = TextView(this).apply {
             text = "📁 እባክዎ ቪዲዮ መርጠው Upload ያድርጉ..."
             textSize = 15f
@@ -74,9 +74,9 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(statusTextView)
 
-        // 🔄 3. የትርጉም ማሳያ ሰሌዳ
+        // 🔄 3. የትርጉም እና የተሰማ ጽሑፍ ማሳያ ሰሌዳ
         translationTextView = TextView(this).apply {
-            text = "⏳ ትርጉም እዚህ ላይ ይታያል..."
+            text = "⏳ ቪዲዮው ሲጀምር የተሰማው እንግሊዝኛ እና ትርጉሙ እዚህ ይጻፋል..."
             textSize = 18f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.parseColor("#10B981"))
@@ -138,95 +138,111 @@ class MainActivity : Activity() {
     }
 
     private fun startPlayingAndTranslating(uri: Uri) {
-        stopAudioAnalysis()
+        stopSpeechEngine()
         
-        statusTextView?.text = "🎬 ቪዲዮውና ምስሉ እየተጫወተ ነው..."
+        statusTextView?.text = "🎬 ቪዲዮው እየተጫወተ ነው... ድምፅ እየተሰማ ነው..."
         statusTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
-        // ምስሉ ጥቁር እንዳይሆን ቪዲዮውን በትክክል ማዘጋጀት
-        videoView?.visibility = android.view.View.VISIBLE
         videoView?.setVideoURI(uri)
-        
         videoView?.setOnPreparedListener { mp ->
             mp.isLooping = true
             videoView?.start()
+            isVideoPlaying = true
+            // 🚀 ቪዲዮው ልክ እንደጀመረ የድምፅ መለዮውን ማንቃት
+            startSpeechRecognitionLoop()
         }
-
-        isAnalyzing = true
-        startMicListeningLoop()
     }
 
-    private fun startMicListeningLoop() {
-        val sampleRate = 16000
-        val channelConfig = AudioFormat.CHANNEL_IN_MONO
-        val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-        val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+    private fun startSpeechRecognitionLoop() {
+        if (!isVideoPlaying) return
 
-        if (checkSelfPermission("android.permission.RECORD_AUDIO") != PackageManager.PERMISSION_GRANTED) return
+        mainHandler.post {
+            try {
+                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+                recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
+                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                }
 
-        try {
-            audioRecord = AudioRecord(
-                MediaRecorder.AudioSource.MIC,
-                sampleRate,
-                channelConfig,
-                audioFormat,
-                bufferSize
-            )
-            audioRecord?.startRecording()
-        } catch (e: Exception) {
-            return
-        }
+                speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+                    override fun onReadyForSpeech(params: AndroidBundle?) {}
+                    override fun onBeginningOfSpeech() {}
+                    override fun onRmsChanged(rmsdB: Float) {}
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+                    override fun onEndOfSpeech() {}
 
-        thread(start = true) {
-            val audioBuffer = ShortArray(bufferSize)
-            var loopCount = 0
-
-            while (isAnalyzing) {
-                val readBytes = audioRecord?.read(audioBuffer, 0, bufferSize) ?: 0
-                if (readBytes > 0) {
-                    var sum = 0L
-                    for (i in 0 until readBytes) {
-                        sum += abs(audioBuffer[i].toInt())
-                    }
-                    val currentAmplitude = sum / readBytes
-
-                    // 🔊 ከቪዲዮው የሚወጣውን ድምፅ ስልኩ ሰምቶ እንዲተረጉም ማድረጊያ
-                    if (currentAmplitude > 500) { 
-                        loopCount++
-                        mainHandler.post {
-                            if (loopCount % 5 == 0) {
-                                showTranslation("challenge")
-                            } else if (loopCount % 10 == 0) {
-                                showTranslation("winner")
-                            } else if (loopCount % 15 == 0) {
-                                showTranslation("subscribe")
-                            }
+                    override fun onError(error: Int) {
+                        // 🔄 ድምፅ መሃል ላይ ቢቋረጥ እንኳ በራሱ መልሶ እንዲቀሰቅስ
+                        if (isVideoPlaying) {
+                            mainHandler.postDelayed({ startSpeechRecognitionLoop() }, 500)
                         }
                     }
-                }
-                Thread.sleep(150)
+
+                    override fun onResults(results: AndroidBundle?) {
+                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        if (!matches.isNullOrEmpty()) {
+                            processSpokenText(matches[0])
+                        }
+                        if (isVideoPlaying) startSpeechRecognitionLoop()
+                    }
+
+                    override fun onPartialResults(partialResults: AndroidBundle?) {
+                        val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        if (!matches.isNullOrEmpty()) {
+                            processSpokenText(matches[0])
+                        }
+                    }
+
+                    override fun onEvent(eventType: Int, params: AndroidBundle?) {}
+                })
+
+                speechRecognizer?.startListening(recognizerIntent)
+            } catch (e: Exception) {
+                translationTextView?.text = "❌ የድምፅ መለዮውን ማንሳት አልተቻለም"
             }
         }
     }
 
-    private fun showTranslation(word: String) {
-        val amharic = translationDictionary[word] ?: ""
-        translationTextView?.setTextColor(Color.parseColor("#F59E0B")) // ወደ ቢጫ መቀየር
-        translationTextView?.text = "🔊 [የተሰማ ቃል]: \"$word\"\n🔄 [ትርጉም]: $amharic"
+    private fun processSpokenText(text: String) {
+        val lowerText = text.lowercase()
+        var translatedWord = ""
+        var amharicMeaning = ""
+
+        // 🔍 መዝገበ ቃላቱን መፈለግ
+        for ((englishWord, amharicTranslation) in translationDictionary) {
+            if (lowerText.contains(englishWord)) {
+                translatedWord = englishWord
+                amharicMeaning = amharicTranslation
+                break
+            }
+        }
+
+        mainHandler.post {
+            if (amharicMeaning.isNotEmpty()) {
+                // 🌟 የተረጎመውን በግልፅ በቢጫ ያሳያል
+                translationTextView?.setTextColor(Color.parseColor("#F59E0B"))
+                translationTextView?.text = "🔊 [የተሰማ ቃል]: \"$translatedWord\"\n🔄 [ትርጉም]: $amharicMeaning"
+            } else {
+                // 🎙️ የሰማውን ሙሉ የእንግሊዝኛ ዓረፍተ ነገር በስክሪኑ ላይ በቀጥታ ይጽፋል!
+                translationTextView?.setTextColor(Color.parseColor("#10B981"))
+                translationTextView?.text = "🎙️ [የተሰማ እንግሊዝኛ]:\n\"$text\""
+            }
+        }
     }
 
-    private fun stopAudioAnalysis() {
-        isAnalyzing = false
+    private fun stopSpeechEngine() {
+        isVideoPlaying = false
         try {
-            audioRecord?.stop()
-            audioRecord?.release()
-            audioRecord = null
+            speechRecognizer?.stopListening()
+            speechRecognizer?.destroy()
+            speechRecognizer = null
             videoView?.stopPlayback()
         } catch (e: Exception) {}
     }
 
     override fun onDestroy() {
-        stopAudioAnalysis()
+        stopSpeechEngine()
         super.onDestroy()
     }
 }
