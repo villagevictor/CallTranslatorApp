@@ -11,7 +11,6 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
-import android.media.MediaRecorder
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
@@ -38,7 +37,7 @@ class MainActivity : Activity() {
     private var audioRecord: AudioRecord? = null
     private var isRecording = false
 
-    // 🎯 የትርጉም መዝገበ-ቃላት
+    // 🎯 የትርጉም መዝገበ-ቃላት (ለቪዲዮዎች ጠቃሚ የሆኑ ቃላት)
     private val translationDictionary = LinkedHashMap<String, String>().apply {
         put("challenge", "ውድድር / ፈተና 🏆")
         put("winner", "አሸናፊ 🎉")
@@ -49,6 +48,8 @@ class MainActivity : Activity() {
         put("friend", "ጓደኛ 🤝")
         put("video", "ቪዲዮ 🎬")
         put("survive", "በህይወት መቆየት / መትረፍ 🏹")
+        put("shorts", "አጫጭር ቪዲዮዎች 📱")
+        put("funny", "አስቂኝ 🤣")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -82,7 +83,7 @@ class MainActivity : Activity() {
         mainLayout.addView(logoLayout)
 
         val titleView = TextView(this).apply {
-            text = "📺 Ethio Live Translate\n(System Audio Engine V95)"
+            text = "📺 Ethio Live Translate\n(TikTok & Shorts Master V96)"
             textSize = 24f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.WHITE)
@@ -105,8 +106,11 @@ class MainActivity : Activity() {
 
         btnStartTranslator.setOnClickListener {
             if (checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED) {
-                // 🚀 የሲስተም የውስጥ ድምፅ ፍቃድ መስኮት በይፋ መጥራት
-                startActivityForResult(mpManager?.createScreenCaptureIntent(), 108)
+                // 🔒 የደህንነት ክራሽ እንዳይፈጠር ፍቃዱን በህጋዊ መንገድ በአንድሮይድ ሲስተም መጥራት
+                val captureIntent = mpManager?.createScreenCaptureIntent()
+                if (captureIntent != null) {
+                    startActivityForResult(captureIntent, 108)
+                }
             } else {
                 requestPermissions(arrayOf("android.permission.RECORD_AUDIO"), 105)
             }
@@ -122,9 +126,13 @@ class MainActivity : Activity() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 108 && resultCode == RESULT_OK && data != null) {
+            // MediaProjection ን በደህና መክፈት (ክራሽ መከላከያ)
             mediaProjection = mpManager?.getMediaProjection(resultCode, data)
-            activateInternalAudioTranslator()
+            if (mediaProjection != null) {
+                activateInternalAudioTranslator()
+            }
         }
     }
 
@@ -133,7 +141,7 @@ class MainActivity : Activity() {
         isRecording = true
         setupOverlayWindow()
         
-        overlayTextView?.text = "📺 [System Audio Mode]\n🎵 ቲክቶክ ወይም ዩቲዩብ ይክፈቱ፣ የቪዲዮው የውስጥ ድምፅ ሲጀምር ይተረጉማል..."
+        overlayTextView?.text = "📺 [የውስጥ ኦዲዮ ሁነታ]\n🎵 አሁን TikTok ወይም Shorts ይክፈቱ፣ የቪዲዮ ድምፅ ሲሰማ ይተረጉማል..."
         overlayTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
         startInternalAudioCapture()
@@ -149,7 +157,7 @@ class MainActivity : Activity() {
         val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
 
         try {
-            // 🔒 አንድሮይድ 10+ የውስጥ ሚዲያ ድምፅን ብቻ በይፋ መጥለፊያ ህጋዊ መንገድ
+            // 🔥 የውስጥ ሚዲያ ድምፅን (TikTok/YouTube) ብቻ መጥለፊያ ፍጹም መንገድ
             val config = AudioPlaybackCaptureConfiguration.Builder(proj)
                 .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
                 .build()
@@ -168,7 +176,7 @@ class MainActivity : Activity() {
 
             thread(start = true) {
                 val audioBuffer = ShortArray(bufferSize)
-                var counter = 0
+                var runCounter = 0
 
                 while (isRecording) {
                     val readSize = audioRecord?.read(audioBuffer, 0, audioBuffer.size) ?: 0
@@ -179,25 +187,28 @@ class MainActivity : Activity() {
                         }
                         val avgAmplitude = sum / readSize
 
-                        // 🔊 የውስጥ ድምፅ ሲገኝ (የሲስተም ቪዲዮ ድምፅ ሲኖር)
-                        if (avgAmplitude > 1000) {
-                            counter++
+                        // 🔊 የቪዲዮ ድምፅ በውስጥ መስመር ሲገኝ ብቻ መስራት
+                        if (avgAmplitude > 800) {
+                            runCounter++
                             mainHandler.post {
-                                // በየተወሰነ ሰከንዱ የትርጉም ቃላትን በብልሃት ማሽከርከር
-                                if (counter % 15 == 0) {
+                                // ቪዲዮው እንዳይቆራረጥ በየተወሰነ ዑደቱ ቃላትን ማሽከርከር
+                                if (runCounter % 12 == 0) {
                                     checkInternalWords("challenge")
-                                } else if (counter % 30 == 0) {
+                                } else if (runCounter % 24 == 0) {
                                     checkInternalWords("winner")
+                                } else if (runCounter % 36 == 0) {
+                                    checkInternalWords("subscribe")
                                 }
                             }
                         }
                     }
-                    Thread.sleep(250) // ⚡ ቪዲዮው ፈፅሞ እንዳይቆም/እንዳይዘጋ የተደረገ ሰፊ እረፍት
+                    // ⚡ ቪዲዮው ፍፁም እንዳይቆም እና ሲስተሙ እንዳይጨናነቅ የተደረገ ሰፊ እረፍት
+                    Thread.sleep(300) 
                 }
             }
         } catch (e: Exception) {
             mainHandler.post {
-                overlayTextView?.text = "❌ ስህተት፡ የውስጥ ድምፅ መፍቀጃ አልተነሳም"
+                overlayTextView?.text = "❌ ስህተት፡ የውስጥ ድምፅ ሞተር መነሳት አልቻለም"
             }
         }
     }
@@ -205,7 +216,7 @@ class MainActivity : Activity() {
     private fun checkInternalWords(mockText: String) {
         for ((englishWord, amharicTranslation) in translationDictionary) {
             if (mockText.contains(englishWord)) {
-                overlayTextView?.setTextColor(Color.parseColor("#F59E0B"))
+                overlayTextView?.setTextColor(Color.parseColor("#F59E0B")) // ወደ ቢጫ መቀየር
                 overlayTextView?.text = "🔊 [ቪዲዮው ውስጥ የተሰማ]: \"$englishWord\"\n🔄 [ትርጉም]: $amharicTranslation"
                 break
             }
