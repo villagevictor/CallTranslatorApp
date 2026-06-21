@@ -31,8 +31,10 @@ class MainActivity : Activity() {
     private var recognizerIntent: Intent? = null
     private var isVideoPlaying = false
 
-    // 🎯 የትርጉም መዝገበ-ቃላት
+    // 🎯 የትርጉም መዝገበ-ቃላት (ቃላቶቹን በደንብ ጨምረናል)
     private val translationDictionary = LinkedHashMap<String, String>().apply {
+        put("hi", "ሰላም 👋")
+        put("guys", "ጓደኞች/ወገኖች 👥")
         put("challenge", "ውድድር / ፈተና 🏆")
         put("winner", "አሸናፊ 🎉")
         put("subscribe", "ሰብስክራይብ ያድርጉ (ይከተሉ)")
@@ -76,7 +78,7 @@ class MainActivity : Activity() {
 
         // 🔄 3. የትርጉም እና የተሰማ ጽሑፍ ማሳያ ሰሌዳ
         translationTextView = TextView(this).apply {
-            text = "⏳ ቪዲዮው ሲጀምር የተሰማው እንግሊዝኛ እና ትርጉሙ እዚህ ይጻፋል..."
+            text = "⏳ የተሰማው እንግሊዝኛ እና ትርጉሙ እዚህ በፍጥነት ይጻፋል..."
             textSize = 18f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.parseColor("#10B981"))
@@ -140,7 +142,7 @@ class MainActivity : Activity() {
     private fun startPlayingAndTranslating(uri: Uri) {
         stopSpeechEngine()
         
-        statusTextView?.text = "🎬 ቪዲዮው እየተጫወተ ነው... ድምፅ እየተሰማ ነው..."
+        statusTextView?.text = "🎬 ቪዲዮው እየተጫወተ ነው... ትርጉም በቅጽበት ይጀምራል!"
         statusTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
         videoView?.setVideoURI(uri)
@@ -148,7 +150,6 @@ class MainActivity : Activity() {
             mp.isLooping = true
             videoView?.start()
             isVideoPlaying = true
-            // 🚀 ቪዲዮው ልክ እንደጀመረ የድምፅ መለዮውን ማንቃት
             startSpeechRecognitionLoop()
         }
     }
@@ -162,6 +163,7 @@ class MainActivity : Activity() {
                 recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
+                    // ⚡ ሳይዘገይ በየሴኮንዱ በከፊል (Partial) የተሰማውን ወዲያውኑ እንዲያሳይ ማድረጊያ ቁልፍ መስመር
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 }
 
@@ -173,9 +175,9 @@ class MainActivity : Activity() {
                     override fun onEndOfSpeech() {}
 
                     override fun onError(error: Int) {
-                        // 🔄 ድምፅ መሃል ላይ ቢቋረጥ እንኳ በራሱ መልሶ እንዲቀሰቅስ
+                        // 🔄 መቆራረጥን ለመከላከል ስህተት ቢፈጠር እንኳ በ 100ms ውስጥ ወዲያው መልሶ ይቀሰቅሰዋል
                         if (isVideoPlaying) {
-                            mainHandler.postDelayed({ startSpeechRecognitionLoop() }, 500)
+                            mainHandler.postDelayed({ startSpeechRecognitionLoop() }, 100)
                         }
                     }
 
@@ -188,6 +190,7 @@ class MainActivity : Activity() {
                     }
 
                     override fun onPartialResults(partialResults: AndroidBundle?) {
+                        // ⚡ ቪዲዮው ተናግሮ ሳይጨርስ ገና መሃል ላይ እያለ በቅጽበት ተቀብሎ መተርጎሚያ
                         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
                             processSpokenText(matches[0])
@@ -199,32 +202,33 @@ class MainActivity : Activity() {
 
                 speechRecognizer?.startListening(recognizerIntent)
             } catch (e: Exception) {
-                translationTextView?.text = "❌ የድምፅ መለዮውን ማንሳት አልተቻለም"
+                translationTextView?.text = "❌ የድምፅ ሞተር ችግር አጋጠመው"
             }
         }
     }
 
     private fun processSpokenText(text: String) {
         val lowerText = text.lowercase()
-        var translatedWord = ""
-        var amharicMeaning = ""
+        var foundMatches = ArrayList<String>()
 
-        // 🔍 መዝገበ ቃላቱን መፈለግ
+        // 🔍 በዓረፍተ ነገሩ ውስጥ ያሉትን መዝገበ ቃላት በሙሉ ፈልፍሎ ማውጣት
         for ((englishWord, amharicTranslation) in translationDictionary) {
             if (lowerText.contains(englishWord)) {
-                translatedWord = englishWord
-                amharicMeaning = amharicTranslation
-                break
+                foundMatches.add("\"$englishWord\" ➡️ $amharicTranslation")
             }
         }
 
         mainHandler.post {
-            if (amharicMeaning.isNotEmpty()) {
-                // 🌟 የተረጎመውን በግልፅ በቢጫ ያሳያል
+            if (foundMatches.isNotEmpty()) {
+                // 🌟 የተረጎመውን ወዲያውኑ በደመቀ ቢጫ ቀለም ያሳያል
                 translationTextView?.setTextColor(Color.parseColor("#F59E0B"))
-                translationTextView?.text = "🔊 [የተሰማ ቃል]: \"$translatedWord\"\n🔄 [ትርጉም]: $amharicMeaning"
+                val output = StringBuilder("🎙️ [የሰማው]: \"$text\"\n\n🔄 [ፈጣን ትርጉም]:\n")
+                for (match in foundMatches) {
+                    output.append("$match\n")
+                }
+                translationTextView?.text = output.toString()
             } else {
-                // 🎙️ የሰማውን ሙሉ የእንግሊዝኛ ዓረፍተ ነገር በስክሪኑ ላይ በቀጥታ ይጽፋል!
+                // 🎙️ መዝገበ ቃላት ውስጥ የሌለ ቃል ቢሆንም እንኳ በቅጽበት ይጽፈዋል
                 translationTextView?.setTextColor(Color.parseColor("#10B981"))
                 translationTextView?.text = "🎙️ [የተሰማ እንግሊዝኛ]:\n\"$text\""
             }
