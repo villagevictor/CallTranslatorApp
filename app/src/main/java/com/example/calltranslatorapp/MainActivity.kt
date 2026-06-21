@@ -31,18 +31,34 @@ class MainActivity : Activity() {
     private var recognizerIntent: Intent? = null
     private var isVideoPlaying = false
 
-    // 🎯 የትርጉም መዝገበ-ቃላት (ቃላቶቹን በደንብ ጨምረናል)
+    // 🎯 ከቪዲዮው ስክሪፕት የተወሰዱ ሁሉንም ቃላት ያካተተ ሰፊ መዝገበ-ቃላት
     private val translationDictionary = LinkedHashMap<String, String>().apply {
-        put("hi", "ሰላም 👋")
-        put("guys", "ጓደኞች/ወገኖች 👥")
-        put("challenge", "ውድድር / ፈተና 🏆")
-        put("winner", "አሸናፊ 🎉")
-        put("subscribe", "ሰብስክራይብ ያድርጉ (ይከተሉ)")
-        put("amazing", "አስደናቂ! ✨")
-        put("money", "ገንዘብ / ዶላር 💵")
-        put("dollars", "ዶላር 💵")
-        put("friend", "ጓደኛ 🤝")
-        put("video", "ቪዲዮ 🎬")
+        put("boom", "ቡም! (ድንገተኛ ድምፅ) 💥")
+        put("look", "ማየት / ተመልከት 👀")
+        put("badboy", "ጎበዝ / አስደናቂ ነገር 😎")
+        put("cool", "ግሩም / በጣም አሪፍ 😎")
+        put("playbutton", "የዩቲዩብ ፕሌይ በተን (የሽልማት ቁልፍ) 🥇")
+        put("wall", "ግድግዳ 🧱")
+        put("good", "ጥሩ / መልካም 👍")
+        put("see", "ማየት 👀")
+        put("special", "ልዩ ✨")
+        put("surprise", "ድንገተኛ ስጦታ / ሰርፕራይዝ 🎉")
+        put("celebrate", "ማክበር / ደስታን መግለጽ 🥳")
+        put("subscribers", "ሰብስክራይበሮች (ተከታዮች) 👥")
+        put("say", "መናገር / ማለት 🗣️")
+        put("something", "አንድ ነገር 📝")
+        put("childhood", "የልጅነት ጊዜ 👶")
+        put("bedroom", "የመኝታ ክፍል 🛏️")
+        put("created", "የፈጠርኩት / የሰራሁት 🛠️")
+        put("channel", "የዩቲዩብ ቻናል 📺")
+        put("blessed", "የተባረክኩ / የታደልኩ 🙏")
+        put("viewers", "ተመልካቾች 👁️‍🗨️")
+        put("closing", "ለማጠቃለል / መጨረሻ ላይ 🏁")
+        put("never", "በፍጹም ❌")
+        put("guys", "ጓደኞቼ / እናንተን 👥")
+        put("granted", "እንደ ቀላል ነገር ማየት (ለእናንተ ያለኝን ክብር አልቀንስም) 🤝")
+        put("thanks", "ምስጋና / አመሰግናለሁ 🙏")
+        put("watching", "ስለተመለከታችሁ 📺")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,7 +71,6 @@ class MainActivity : Activity() {
             setPadding(30, 30, 30, 30)
         }
 
-        // 📺 1. የቪዲዮ ማጫወቻ መስኮት
         videoView = VideoView(this).apply {
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -66,7 +81,6 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(videoView)
 
-        // 📝 2. የሁኔታ መግለጫ
         statusTextView = TextView(this).apply {
             text = "📁 እባክዎ ቪዲዮ መርጠው Upload ያድርጉ..."
             textSize = 15f
@@ -76,9 +90,8 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(statusTextView)
 
-        // 🔄 3. የትርጉም እና የተሰማ ጽሑፍ ማሳያ ሰሌዳ
         translationTextView = TextView(this).apply {
-            text = "⏳ የተሰማው እንግሊዝኛ እና ትርጉሙ እዚህ በፍጥነት ይጻፋል..."
+            text = "⏳ ቪዲዮው ሲጀምር እያንዳንዱ ቃል እና ትርጉም እዚህ ያለምንም መቆራረጥ ይጻፋል..."
             textSize = 18f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.parseColor("#10B981"))
@@ -87,7 +100,7 @@ class MainActivity : Activity() {
             val descDrawable = GradientDrawable().apply {
                 setColor(Color.parseColor("#1E293B"))
                 cornerRadius = 25f
-                setStroke(3, Color.parseColor("#3B82F6"))
+                setStroke(4, Color.parseColor("#3B82F6"))
             }
             background = descDrawable
             layoutParams = LinearLayout.LayoutParams(
@@ -97,7 +110,6 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(translationTextView)
 
-        // 📤 4. ቪዲዮ መምረጫ በተን
         val btnUploadVideo = Button(this).apply {
             text = "📁 ቪዲዮ ምረጥ (Upload Video)"
             setTextColor(Color.WHITE)
@@ -142,7 +154,7 @@ class MainActivity : Activity() {
     private fun startPlayingAndTranslating(uri: Uri) {
         stopSpeechEngine()
         
-        statusTextView?.text = "🎬 ቪዲዮው እየተጫወተ ነው... ትርጉም በቅጽበት ይጀምራል!"
+        statusTextView?.text = "🎬 ቪዲዮው እየተጫወተ ነው... የማያቋርጥ የትርጉም ዥረት ነቅቷል!"
         statusTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
         videoView?.setVideoURI(uri)
@@ -150,87 +162,93 @@ class MainActivity : Activity() {
             mp.isLooping = true
             videoView?.start()
             isVideoPlaying = true
-            startSpeechRecognitionLoop()
+            
+            // 🚀 ቀጣይነት ያለው የድምፅ መለዮ ሞተር ማስጀመር
+            initSpeechRecognizer()
+            startListeningEngine()
         }
     }
 
-    private fun startSpeechRecognitionLoop() {
-        if (!isVideoPlaying) return
+    private fun initSpeechRecognizer() {
+        try {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+            recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                // 🔥 ድምፅ መሃል ላይ ለሰከንድ ቢቆም እንኳ ሞተሩ እንዳይዘጋ የሚከለክሉ የጉግል ሚስጥራዊ ቁልፎች
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 60000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 60000L)
+            }
 
-        mainHandler.post {
-            try {
-                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-                recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
-                    // ⚡ ሳይዘገይ በየሴኮንዱ በከፊል (Partial) የተሰማውን ወዲያውኑ እንዲያሳይ ማድረጊያ ቁልፍ መስመር
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: AndroidBundle?) {}
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {}
+
+                override fun onError(error: Int) {
+                    // 🔄 የድሮ ጽሑፍ ሳይጠፋ ያለምንም መቆራረጥ ሞተሩን በቅጽበት መልሶ ማስነሻ
+                    if (isVideoPlaying) {
+                        mainHandler.postDelayed({ startListeningEngine() }, 50)
+                    }
                 }
 
-                speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: AndroidBundle?) {}
-                    override fun onBeginningOfSpeech() {}
-                    override fun onRmsChanged(rmsdB: Float) {}
-                    override fun onBufferReceived(buffer: ByteArray?) {}
-                    override fun onEndOfSpeech() {}
-
-                    override fun onError(error: Int) {
-                        // 🔄 መቆራረጥን ለመከላከል ስህተት ቢፈጠር እንኳ በ 100ms ውስጥ ወዲያው መልሶ ይቀሰቅሰዋል
-                        if (isVideoPlaying) {
-                            mainHandler.postDelayed({ startSpeechRecognitionLoop() }, 100)
-                        }
+                override fun onResults(results: AndroidBundle?) {
+                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    if (!matches.isNullOrEmpty()) {
+                        processSpokenText(matches[0])
                     }
+                    if (isVideoPlaying) startListeningEngine()
+                }
 
-                    override fun onResults(results: AndroidBundle?) {
-                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
-                            processSpokenText(matches[0])
-                        }
-                        if (isVideoPlaying) startSpeechRecognitionLoop()
+                override fun onPartialResults(partialResults: AndroidBundle?) {
+                    // ⚡ ቪዲዮው እየተናገረ እያለ በየሚሊሰከንዱ ጽሑፉን በቅጽበት ማውጫ
+                    val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    if (!matches.isNullOrEmpty()) {
+                        processSpokenText(matches[0])
                     }
+                }
 
-                    override fun onPartialResults(partialResults: AndroidBundle?) {
-                        // ⚡ ቪዲዮው ተናግሮ ሳይጨርስ ገና መሃል ላይ እያለ በቅጽበት ተቀብሎ መተርጎሚያ
-                        val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
-                            processSpokenText(matches[0])
-                        }
-                    }
+                override fun onEvent(eventType: Int, params: AndroidBundle?) {}
+            })
+        } catch (e: Exception) {}
+    }
 
-                    override fun onEvent(eventType: Int, params: AndroidBundle?) {}
-                })
-
-                speechRecognizer?.startListening(recognizerIntent)
-            } catch (e: Exception) {
-                translationTextView?.text = "❌ የድምፅ ሞተር ችግር አጋጠመው"
+    private fun startListeningEngine() {
+        if (isVideoPlaying) {
+            mainHandler.post {
+                try {
+                    speechRecognizer?.startListening(recognizerIntent)
+                } catch (e: Exception) {}
             }
         }
     }
 
     private fun processSpokenText(text: String) {
         val lowerText = text.lowercase()
-        var foundMatches = ArrayList<String>()
+        val foundTranslations = ArrayList<String>()
 
-        // 🔍 በዓረፍተ ነገሩ ውስጥ ያሉትን መዝገበ ቃላት በሙሉ ፈልፍሎ ማውጣት
+        // 🔍 በቪዲዮው ንግግር ውስጥ ያሉትን ቃላት በሙሉ ከመዝገበ-ቃላቱ ጋር ማመሳከር
         for ((englishWord, amharicTranslation) in translationDictionary) {
             if (lowerText.contains(englishWord)) {
-                foundMatches.add("\"$englishWord\" ➡️ $amharicTranslation")
+                foundTranslations.add("• \"$englishWord\" ➡️ $amharicTranslation")
             }
         }
 
         mainHandler.post {
-            if (foundMatches.isNotEmpty()) {
-                // 🌟 የተረጎመውን ወዲያውኑ በደመቀ ቢጫ ቀለም ያሳያል
-                translationTextView?.setTextColor(Color.parseColor("#F59E0B"))
-                val output = StringBuilder("🎙️ [የሰማው]: \"$text\"\n\n🔄 [ፈጣን ትርጉም]:\n")
-                for (match in foundMatches) {
-                    output.append("$match\n")
+            if (foundTranslations.isNotEmpty()) {
+                translationTextView?.setTextColor(Color.parseColor("#F59E0B")) // ወደ ደማቅ ቢጫ መቀየር
+                val output = StringBuilder("🎙️ [የተሰማ ሙሉ እንግሊዝኛ]:\n\"$text\"\n\n🔄 [የቃላት ትርጉም]:\n")
+                for (trans in foundTranslations) {
+                    output.append("$trans\n")
                 }
                 translationTextView?.text = output.toString()
             } else {
-                // 🎙️ መዝገበ ቃላት ውስጥ የሌለ ቃል ቢሆንም እንኳ በቅጽበት ይጽፈዋል
+                // መዝገበ ቃላት ውስጥ የሌለ ቃል ቢሆንም እንኳ የሰማውን በሙሉ በቅጽበት በአረንጓዴ ይጽፈዋል
                 translationTextView?.setTextColor(Color.parseColor("#10B981"))
-                translationTextView?.text = "🎙️ [የተሰማ እንግሊዝኛ]:\n\"$text\""
+                translationTextView?.text = "🎙️ [የሰማው እንግሊዝኛ]:\n\"$text\""
             }
         }
     }
