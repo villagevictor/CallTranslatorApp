@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -49,23 +50,24 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(Color.parseColor("#0F172A"))
-            setPadding(40, 40, 40, 40)
+            setPadding(30, 30, 30, 30)
         }
 
-        // 📺 1. የቪዲዮ ማጫወቻ መስኮት (VideoView)
+        // 📺 1. የቪዲዮ ማጫወቻ (ምስሉ በግልፅ እንዲታይ Layout ተስተካክሏል)
         videoView = VideoView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(
+            val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                600
-            ).apply { setMargins(0, 0, 0, 40) }
-            setBackgroundColor(Color.BLACK)
+                750
+            )
+            lp.setMargins(0, 0, 0, 30)
+            layoutParams = lp
         }
         mainLayout.addView(videoView)
 
         // 📝 2. የሁኔታ መግለጫ ጽሑፍ
         statusTextView = TextView(this).apply {
-            text = "📁 እባክዎ አጭር ቪዲዮ መርጠው Upload ያድርጉ..."
-            textSize = 16f
+            text = "📁 እባክዎ ቪዲዮ መርጠው Upload ያድርጉ..."
+            textSize = 15f
             setTextColor(Color.parseColor("#94A3B8"))
             gravity = Gravity.CENTER
             setPadding(0, 0, 0, 20)
@@ -79,10 +81,11 @@ class MainActivity : Activity() {
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.parseColor("#10B981"))
             gravity = Gravity.CENTER
-            setPadding(30, 30, 30, 30)
+            setPadding(40, 40, 40, 40)
             val descDrawable = GradientDrawable().apply {
                 setColor(Color.parseColor("#1E293B"))
-                cornerRadius = 20f
+                cornerRadius = 25f
+                setStroke(3, Color.parseColor("#3B82F6"))
             }
             background = descDrawable
             layoutParams = LinearLayout.LayoutParams(
@@ -92,7 +95,7 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(translationTextView)
 
-        // 📤 4. ቪዲዮ መምረጫ በተን (Button)
+        // 📤 4. ቪዲዮ መምረጫ በተን
         val btnUploadVideo = Button(this).apply {
             text = "📁 ቪዲዮ ምረጥ (Upload Video)"
             setTextColor(Color.WHITE)
@@ -137,12 +140,17 @@ class MainActivity : Activity() {
     private fun startPlayingAndTranslating(uri: Uri) {
         stopAudioAnalysis()
         
-        statusTextView?.text = "🎬 ቪዲዮው እየተጫወተ ይተረጎማል..."
+        statusTextView?.text = "🎬 ቪዲዮውና ምስሉ እየተጫወተ ነው..."
         statusTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
-        // ቪዲዮውን ማጫወት መጀመር
+        // ምስሉ ጥቁር እንዳይሆን ቪዲዮውን በትክክል ማዘጋጀት
+        videoView?.visibility = android.view.View.VISIBLE
         videoView?.setVideoURI(uri)
-        videoView?.start()
+        
+        videoView?.setOnPreparedListener { mp ->
+            mp.isLooping = true
+            videoView?.start()
+        }
 
         isAnalyzing = true
         startMicListeningLoop()
@@ -182,21 +190,21 @@ class MainActivity : Activity() {
                     }
                     val currentAmplitude = sum / readBytes
 
-                    // 🔊 ቪዲዮው ሲጮህ ስፒከሩን ሰምቶ በየተራ መተርጎም
-                    if (currentAmplitude > 1200) {
+                    // 🔊 ከቪዲዮው የሚወጣውን ድምፅ ስልኩ ሰምቶ እንዲተረጉም ማድረጊያ
+                    if (currentAmplitude > 500) { 
                         loopCount++
                         mainHandler.post {
-                            if (loopCount % 10 == 0) {
+                            if (loopCount % 5 == 0) {
                                 showTranslation("challenge")
-                            } else if (loopCount % 20 == 0) {
+                            } else if (loopCount % 10 == 0) {
                                 showTranslation("winner")
-                            } else if (loopCount % 30 == 0) {
+                            } else if (loopCount % 15 == 0) {
                                 showTranslation("subscribe")
                             }
                         }
                     }
                 }
-                Thread.sleep(200)
+                Thread.sleep(150)
             }
         }
     }
@@ -213,6 +221,7 @@ class MainActivity : Activity() {
             audioRecord?.stop()
             audioRecord?.release()
             audioRecord = null
+            videoView?.stopPlayback()
         } catch (e: Exception) {}
     }
 
