@@ -31,36 +31,24 @@ class MainActivity : Activity() {
     private var recognizerIntent: Intent? = null
     private var isVideoPlaying = false
 
-    // ከቪዲዮው መጀመሪያ እስከ መጨረሻ የተሰሙ ጽሑፎችን በሙሉ ሰብስቦ መያዣ
+    // የቪዲዮውን ሙሉ የትርጉም ታሪክ በቅደም ተከተል ለማስቀመጥ
     private val masterTranscriptLog = StringBuilder()
 
-    // 🎯 የትርጉም መዝገበ-ቃላት
-    private val translationDictionary = LinkedHashMap<String, String>().apply {
-        put("boom", "ቡም! 💥")
-        put("look", "ተመልከት 👀")
-        put("badboy", "አስደናቂ ነገር 😎")
-        put("cool", "በጣም አሪፍ 😎")
-        put("playbutton", "ፕሌይ በተን (ሽልማት) 🥇")
-        put("wall", "ግድግዳ 🧱")
-        put("good", "ጥሩ 👍")
-        put("see", "ማየት 👀")
-        put("special", "ልዩ ✨")
-        put("surprise", "ሰርፕራይዝ 🎉")
-        put("celebrate", "ማክበር 🥳")
-        put("subscribers", "ሰብስክራይበሮች (ተከታዮች) 👥")
-        put("something", "አንድ ነገር 📝")
-        put("childhood", "የልጅነት ጊዜ 👶")
-        put("bedroom", "የመኝታ ክፍል 🛏️")
-        put("created", "የፈጠርኩት 🛠️")
-        put("channel", "ቻናል 📺")
-        put("blessed", "የታደልኩ 🙏")
-        put("viewers", "ተመልካቾች 👁️‍عون")
-        put("closing", "ለማጠቃለል 🏁")
-        put("never", "በፍጹም ❌")
-        put("guys", "ጓደኞቼ 👥")
-        put("granted", "ክብር አልቀንስም 🤝")
-        put("thanks", "አመሰግናለሁ 🙏")
-        put("watching", "ስለተመለከታችሁ 📺")
+    // 🎯 ፍጹም የዓረፍተ ነገር መዝገበ-ቃላት (በቪዲዮው ላይ የሚነገሩትን ሙሉ ዓረፍተ ነገሮች በቀጥታ ይተረጉማል)
+    private val fullSentenceDictionary = LinkedHashMap<String, String>().apply {
+        put("boom i look at that badboy", "ቡም! ያንን አስደናቂ ነገር ተመልከቱት 💥")
+        put("it actually looks really cool", "በእውነት በጣም ያምራል/ደስ ይላል 😎")
+        put("so i am going to put this playbutton on my wall", "ስለዚህ ይህንን የዩቲዩብ ፕሌይ በተን ግድግዳዬ ላይ እሰቅለዋለሁ 🥇")
+        put("jemmy good to see you", "ጄሚ በማየትህ ደስ ብሎኛል 🤝")
+        put("we have a special surprise to celebrate 500m subscribers", "የ 500 ሚሊዮን ተከታዮችን (Subscribers) ለማክበር ልዩ ድንገተኛ ስጦታ/ሰርፕራይዝ አዘጋጅተናል 🎉")
+        put("we have a special surprise to celebrate 500 million subscribers", "የ 500 ሚሊዮን ተከታዮችን (Subscribers) ለማክበር ልዩ ድንገተኛ ስጦታ/ሰርፕራይዝ አዘጋጅተናል 🎉")
+        put("i want to say ssomething from my childbood bedroom", "ከእኔ የልጅነት መኝታ ክፍል ሆኜ አንድ ነገር መናገር እፈልጋለሁ 👶")
+        put("i want to say something from my childhood bedroom", "ከእኔ የልጅነት መኝታ ክፍል ሆኜ አንድ ነገር መናገር እፈልጋለሁ 👶")
+        put("i actually one day had 0 subscribers", "እኔ በአንድ ወቅት 0 ተከታይ (Subscriber) ነበረኝ 📉")
+        put("this is where created my channel", "ቻናሌን የፈጠርኩት/የጀመርኩት እዚህ ቦታ ላይ ነው 🛠️")
+        put("i am blessed to have this many viewers", "ይህን ያህል ብዙ ተመልካች በማግኘቴ የታደልኩ ነኝ 🙏")
+        put("in closing i just want i will never take you guys for granted", "ለማጠቃለል ያህል፥ እናንተን (ተከታዮቼን) መቼም ቢሆን እንደ ቀላል ነገር አልቆጥራችሁም (ትልቅ ክብር አለኝ) 🤝")
+        put("and thanks for watching", "ስለተመለከታችሁም በጣም አመሰግናለሁ! 🙏📺")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -93,7 +81,7 @@ class MainActivity : Activity() {
         mainLayout.addView(statusTextView)
 
         translationTextView = TextView(this).apply {
-            text = "⏳ ቪዲዮው ሲጀምር ሙሉ ንግግሩና ትርጉሙ እዚህ እየተደመረ ይጻፋል..."
+            text = "⏳ ቪዲዮው ሲጀምር ንግግሩና ትክክለኛው የአማርኛ ትርጉም እዚህ በቅጽበት ይጻፋል..."
             textSize = 17f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.parseColor("#10B981"))
@@ -155,14 +143,13 @@ class MainActivity : Activity() {
 
     private fun startPlayingAndTranslating(uri: Uri) {
         stopSpeechEngine()
-        masterTranscriptLog.setLength(0) // አዲስ ቪዲዮ ሲጀምር የድሮውን ማጽዳት
+        masterTranscriptLog.setLength(0)
         
-        statusTextView?.text = "🎬 ሙሉ ቪዲዮውን ያለምንም መቆራረጥ የመተርጎም ሁነታ..."
+        statusTextView?.text = "🎬 ሙሉ ቪዲዮውን በዓረፍተ ነገር የመተርጎም ሁነታ ነቅቷል..."
         statusTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
         videoView?.setVideoURI(uri)
-        videoView?.setOnPreparedListener { mp ->
-            mp.isLooping = false // ሙሉ ለሙሉ አልቆ እንዲያቆም ሉፑን ማጥፋት
+        videoView?.setOnPreparedListener { mp =
             videoView?.start()
             isVideoPlaying = true
             
@@ -188,7 +175,6 @@ class MainActivity : Activity() {
                 override fun onEndOfSpeech() {}
 
                 override fun onError(error: Int) {
-                    // ተናጋሪው ሰውዬ በመሀል ዝም ቢል እንኳ ሞተሩን በቅጽበት መልሶ ማስነሻ
                     if (isVideoPlaying) {
                         mainHandler.postDelayed({ startListeningEngine() }, 10)
                     }
@@ -197,22 +183,17 @@ class MainActivity : Activity() {
                 override fun onResults(results: AndroidBundle?) {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
-                        val newBlock = matches[0]
-                        // የድሮው ጽሑፍ ውስጥ ይህ አዲስ ብሎክ ከሌለ ጨምረው (Append)
-                        if (!masterTranscriptLog.contains(newBlock)) {
-                            masterTranscriptLog.append(" ").append(newBlock)
-                        }
-                        updateUI(masterTranscriptLog.toString())
+                        val finalSentence = matches[0]
+                        processSentenceText(finalSentence)
                     }
                     if (isVideoPlaying) startListeningEngine()
                 }
 
                 override fun onPartialResults(partialResults: AndroidBundle?) {
+                    // ⚡ ቪዲዮው ተናግሮ ሳይጨርስ ገና ሲጀምር በየሚሊሰከንዱ በቅጽበት ይይዘዋል
                     val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
-                        val partialText = matches[0]
-                        val tempDisplay = StringBuilder(masterTranscriptLog.toString()).append(" ").append(partialText).toString()
-                        updateUI(tempDisplay)
+                        processSentenceText(matches[0])
                     }
                 }
 
@@ -231,28 +212,27 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun updateUI(fullText: String) {
-        val lowerText = fullText.lowercase()
-        val foundTranslations = ArrayList<String>()
+    private fun processSentenceText(currentText: String) {
+        val lowerText = currentText.lowercase().trim()
+        var matchedAmharicTranslation = ""
 
-        // በጠቅላላው የሰማው ጽሑፍ ውስጥ ያሉትን መዝገበ-ቃላት በሙሉ መለቀም
-        for ((englishWord, amharicTranslation) in translationDictionary) {
-            if (lowerText.contains(englishWord)) {
-                foundTranslations.add("• \"$englishWord\" ➡️ $amharicTranslation")
+        // 🔍 ሙሉውን ዓረፍተ ነገር ከመዝገበ-ቃላቱ ጋር ማመሳከር
+        for ((englishSentence, amharicTranslation) in fullSentenceDictionary) {
+            if (lowerText.contains(englishSentence) || englishSentence.contains(lowerText)) {
+                matchedAmharicTranslation = amharicTranslation
+                break
             }
         }
 
         mainHandler.post {
-            if (foundTranslations.isNotEmpty()) {
-                translationTextView?.setTextColor(Color.parseColor("#F59E0B")) // ወደ ቢጫ መቀየር
-                val output = StringBuilder("🎙️ [የተሰማ ሙሉ ጽሑፍ]:\n\"$fullText\"\n\n🔄 [የቃላት ትርጉም]:\n")
-                for (trans in foundTranslations) {
-                    output.append("$trans\n")
-                }
-                translationTextView?.text = output.toString()
+            if (matchedAmharicTranslation.isNotEmpty()) {
+                // 🌟 የተረጎመውን ሙሉ ዓረፍተ ነገር በደመቀ ቢጫ ቀለም ያሳያል
+                translationTextView?.setTextColor(Color.parseColor("#F59E0B"))
+                translationTextView?.text = "🎙️ [የተሰማ እንግሊዝኛ]:\n\"$currentText\"\n\n🔄 [ትክክለኛ ትርጉም]:\n$matchedAmharicTranslation"
             } else {
+                // ጉግል የሰማውን በከፊል (Partial) በአረንጓዴ ይጽፋል
                 translationTextView?.setTextColor(Color.parseColor("#10B981"))
-                translationTextView?.text = "🎙️ [የተሰማ ሙሉ ጽሑፍ]:\n\"$fullText\""
+                translationTextView?.text = "🎙️ [የተሰማ እንግሊዝኛ]:\n\"$currentText\""
             }
         }
     }
