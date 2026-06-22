@@ -31,14 +31,11 @@ class MainActivity : Activity() {
     private var recognizerIntent: Intent? = null
     private var isVideoPlaying = false
 
-    // የቪዲዮውን ሙሉ የትርጉም ታሪክ በቅደም ተከተል ለማስቀመጥ
-    private val masterTranscriptLog = StringBuilder()
-
-    // 🎯 ፍጹም የዓረፍተ ነገር መዝገበ-ቃላት (በቪዲዮው ላይ የሚነገሩትን ሙሉ ዓረፍተ ነገሮች በቀጥታ ይተረጉማል)
+    // 🎯 ፍጹም የዓረፍተ ነገር መዝገበ-ቃላት
     private val fullSentenceDictionary = LinkedHashMap<String, String>().apply {
         put("boom i look at that badboy", "ቡም! ያንን አስደናቂ ነገር ተመልከቱት 💥")
         put("it actually looks really cool", "በእውነት በጣም ያምራል/ደስ ይላል 😎")
-        put("so i am going to put this playbutton on my wall", "ስለዚህ ይህንን የዩቲዩብ ፕሌይ በተን ግድግዳዬ ላይ እሰቅለዋለሁ 🥇")
+        put("so i am going to put this playbutton on my wall", "Template-ስለዚህ ይህንን የዩቲዩብ ፕሌይ በተን ግድግዳዬ ላይ እሰቅለዋለሁ 🥇")
         put("jemmy good to see you", "ጄሚ በማየትህ ደስ ብሎኛል 🤝")
         put("we have a special surprise to celebrate 500m subscribers", "የ 500 ሚሊዮን ተከታዮችን (Subscribers) ለማክበር ልዩ ድንገተኛ ስጦታ/ሰርፕራይዝ አዘጋጅተናል 🎉")
         put("we have a special surprise to celebrate 500 million subscribers", "የ 500 ሚሊዮን ተከታዮችን (Subscribers) ለማክበር ልዩ ድንገተኛ ስጦታ/ሰርፕራይዝ አዘጋጅተናል 🎉")
@@ -143,13 +140,13 @@ class MainActivity : Activity() {
 
     private fun startPlayingAndTranslating(uri: Uri) {
         stopSpeechEngine()
-        masterTranscriptLog.setLength(0)
         
         statusTextView?.text = "🎬 ሙሉ ቪዲዮውን በዓረፍተ ነገር የመተርጎም ሁነታ ነቅቷል..."
         statusTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
         videoView?.setVideoURI(uri)
-        videoView?.setOnPreparedListener { mp =
+        // 🛠️ እዚህ መስመር ላይ የነበረው 'mp =' ስህተት ተስተካክሏል
+        videoView?.setOnPreparedListener { mp ->
             videoView?.start()
             isVideoPlaying = true
             
@@ -183,14 +180,12 @@ class MainActivity : Activity() {
                 override fun onResults(results: AndroidBundle?) {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
-                        val finalSentence = matches[0]
-                        processSentenceText(finalSentence)
+                        processSentenceText(matches[0])
                     }
                     if (isVideoPlaying) startListeningEngine()
                 }
 
                 override fun onPartialResults(partialResults: AndroidBundle?) {
-                    // ⚡ ቪዲዮው ተናግሮ ሳይጨርስ ገና ሲጀምር በየሚሊሰከንዱ በቅጽበት ይይዘዋል
                     val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
                         processSentenceText(matches[0])
@@ -216,7 +211,6 @@ class MainActivity : Activity() {
         val lowerText = currentText.lowercase().trim()
         var matchedAmharicTranslation = ""
 
-        // 🔍 ሙሉውን ዓረፍተ ነገር ከመዝገበ-ቃላቱ ጋር ማመሳከር
         for ((englishSentence, amharicTranslation) in fullSentenceDictionary) {
             if (lowerText.contains(englishSentence) || englishSentence.contains(lowerText)) {
                 matchedAmharicTranslation = amharicTranslation
@@ -226,11 +220,9 @@ class MainActivity : Activity() {
 
         mainHandler.post {
             if (matchedAmharicTranslation.isNotEmpty()) {
-                // 🌟 የተረጎመውን ሙሉ ዓረፍተ ነገር በደመቀ ቢጫ ቀለም ያሳያል
                 translationTextView?.setTextColor(Color.parseColor("#F59E0B"))
                 translationTextView?.text = "🎙️ [የተሰማ እንግሊዝኛ]:\n\"$currentText\"\n\n🔄 [ትክክለኛ ትርጉም]:\n$matchedAmharicTranslation"
             } else {
-                // ጉግል የሰማውን በከፊል (Partial) በአረንጓዴ ይጽፋል
                 translationTextView?.setTextColor(Color.parseColor("#10B981"))
                 translationTextView?.text = "🎙️ [የተሰማ እንግሊዝኛ]:\n\"$currentText\""
             }
