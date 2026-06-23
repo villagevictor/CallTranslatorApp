@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
 import android.os.Bundle as AndroidBundle
@@ -13,7 +15,6 @@ import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.speech.tts.TextToSpeech
 import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
@@ -27,7 +28,7 @@ import java.net.URLEncoder
 import java.util.Locale
 import kotlin.concurrent.thread
 
-class MainActivity : Activity(), TextToSpeech.OnInitListener {
+class MainActivity : Activity() {
 
     private var videoView: VideoView? = null
     private var statusTextView: TextView? = null
@@ -38,16 +39,12 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var recognizerIntent: Intent? = null
     private var isVideoPlaying = false
 
-    // 🎙️ የአማርኛ ድምፅ ማውጫ ሞተር (TextToSpeech)
-    private var textToSpeech: TextToSpeech? = null
-    private var isTtsReady = false
+    // 🔊 የኦንላይን አማርኛ ድምፅ ማጫወቻ
+    private var mediaPlayer: MediaPlayer? = null
     private var lastSpokenText = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // 🚀 የድምፅ ሞተሩን በጀርባ ማስነሳት
-        textToSpeech = TextToSpeech(this, this)
 
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -76,7 +73,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         mainLayout.addView(statusTextView)
 
         translationTextView = TextView(this).apply {
-            text = "⏳ ቪዲዮው ሲጀምር የተረጎመውን በአማርኛ ድምፅ ያወራል።.."
+            text = "⏳ ቪዲዮው ሲጀምር በኦንላይን አማርኛ ድምፅ (Cloud Voice) ይተረጎማል።.."
             textSize = 17f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.parseColor("#10B981"))
@@ -85,7 +82,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             val descDrawable = GradientDrawable().apply {
                 setColor(Color.parseColor("#1E293B"))
                 cornerRadius = 25f
-                setStroke(4, Color.parseColor("#F59E0B")) // በደማቅ ቢጫ ማሳመሪያ border
+                setStroke(4, Color.parseColor("#F59E0B"))
             }
             background = descDrawable
             layoutParams = LinearLayout.LayoutParams(
@@ -119,27 +116,6 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         setContentView(mainLayout)
     }
 
-    // 🎙️ የ TextToSpeech ሞተር በተሳካ ሁኔታ ሲነሳ የሚሠራ
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            // የአማርኛ ቋንቋ ኮድ (am) መምረጥ
-            val amharicLocale = Locale("am", "ET")
-            val result = textToSpeech?.setLanguage(amharicLocale)
-            
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                isTtsReady = false
-                mainHandler.post {
-                    statusTextView?.text = "⚠️ ስልክዎ ላይ የአማርኛ የድምፅ ፓኬጅ አልተጫነም!"
-                    statusTextView?.setTextColor(Color.RED)
-                }
-            } else {
-                isTtsReady = true
-                // የድምፅ ፍጥነቱን መካከለኛ ማድረግ (እንዳይፈጥን)
-                textToSpeech?.setSpeechRate(0.9f)
-            }
-        }
-    }
-
     private fun openVideoPicker() {
         val intent = Intent(Intent.ACTION_PICK).apply {
             type = "video/*"
@@ -161,13 +137,12 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         stopSpeechEngine()
         lastSpokenText = ""
         
-        statusTextView?.text = "🎬 ቪዲዮው ድምፅ አልባ (Muted) ሆኗል፤ በአማርኛ Voice ይተረጎማል!..."
+        statusTextView?.text = "🎬 የ Cloud Amharic Voice ሁነታ ነቅቷል (ድምፅ አልባ)..."
         statusTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
         videoView?.setVideoURI(uri)
         videoView?.setOnPreparedListener { mp ->
-            // 🔥 የቪዲዮውን የእንግሊዝኛ ድምፅ ሙሉ በሙሉ 0 በማድረግ ማጥፋት (Mute)
-            mp.setVolume(0f, 0f)
+            mp.setVolume(0f, 0f) // የእንግሊዝኛውን ድምፅ ማጥፋት
             videoView?.start()
             isVideoPlaying = true
             
@@ -201,7 +176,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 override fun onResults(results: AndroidBundle?) {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
-                        translateAndSpeak(matches[0])
+                        translateAndSpeakOnline(matches[0])
                     }
                     if (isVideoPlaying) startListeningEngine()
                 }
@@ -209,7 +184,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 override fun onPartialResults(partialResults: AndroidBundle?) {
                     val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
-                        translateAndSpeak(matches[0])
+                        translateAndSpeakOnline(matches[0])
                     }
                 }
 
@@ -228,7 +203,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun translateAndSpeak(textToTranslate: String) {
+    private fun translateAndSpeakOnline(textToTranslate: String) {
         if (textToTranslate.isEmpty()) return
 
         thread {
@@ -256,15 +231,40 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         val amharicResult = rawResponse.substring(firstIndex, secondIndex)
 
                         mainHandler.post {
-                            translationTextView?.text = "🎙️ [እንግሊዝኛ]: \"$textToTranslate\"\n\n🔊 [አማርኛ Voice]:\n$amharicResult"
+                            translationTextView?.text = "🎙️ [እንግሊዝኛ]: \"$textToTranslate\"\n\n☁️ [Cloud አማርኛ Voice]:\n$amharicResult"
                             
-                            // 🔊 የአማርኛ ድምፅ ማውጫ - ተመሳሳይ ዓረፍተ ነገር ደጋግሞ እንዳይጮኽ መከላከያ
-                            if (isTtsReady && amharicResult != lastSpokenText) {
+                            if (amharicResult != lastSpokenText) {
                                 lastSpokenText = amharicResult
-                                textToSpeech?.speak(amharicResult, TextToSpeech.QUEUE_FLUSH, null, null)
+                                playAmharicAudioFromCloud(amharicResult)
                             }
                         }
                     }
+                }
+            } catch (e: Exception) {}
+        }
+    }
+
+    // 🌐 የአማርኛ ጽሑፉን ወደ ድምፅ ቀይሮ በኦንላይን የሚያጫውት ዘዴ
+    private fun playAmharicAudioFromCloud(textToSpeak: String) {
+        thread {
+            try {
+                mediaPlayer?.stop()
+                mediaPlayer?.release()
+                mediaPlayer = null
+
+                val ttsUrl = "https://translate.google.com/translate_tts?ie=UTF-8&tl=am&client=tw-ob&q=" +
+                        URLEncoder.encode(textToSpeak, "UTF-8")
+
+                mediaPlayer = MediaPlayer().apply {
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .build()
+                    )
+                    setDataSource(ttsUrl)
+                    prepare()
+                    start()
                 }
             } catch (e: Exception) {}
         }
@@ -276,14 +276,15 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             speechRecognizer?.stopListening()
             speechRecognizer?.destroy()
             speechRecognizer = null
-            textToSpeech?.stop()
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+            mediaPlayer = null
             videoView?.stopPlayback()
         } catch (e: Exception) {}
     }
 
     override fun onDestroy() {
         stopSpeechEngine()
-        textToSpeech?.shutdown()
         super.onDestroy()
     }
 }
