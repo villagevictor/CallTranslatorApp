@@ -1,13 +1,17 @@
 package com.example.calltranslatorapp
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Bundle as AndroidBundle
 import android.os.Handler
@@ -19,7 +23,6 @@ import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.VideoView
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -30,50 +33,45 @@ import kotlin.concurrent.thread
 
 class MainActivity : Activity() {
 
-    private var videoView: VideoView? = null
     private var statusTextView: TextView? = null
     private var translationTextView: TextView? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     
     private var speechRecognizer: SpeechRecognizer? = null
     private var recognizerIntent: Intent? = null
-    private var isVideoPlaying = false
+    private var isListeningActive = false
 
     private var mediaPlayer: MediaPlayer? = null
     private var lastSpokenText = ""
+    
+    // 🎛️ የሲስተም ድምፅ መቆጣጠሪያ (AudioManager)
+    private var audioManager: AudioManager? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(Color.parseColor("#0F172A"))
-            setPadding(30, 30, 30, 30)
+            setPadding(40, 40, 40, 40)
         }
-
-        videoView = VideoView(this).apply {
-            val lp = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                750
-            )
-            lp.setMargins(0, 0, 0, 30)
-            layoutParams = lp
-        }
-        mainLayout.addView(videoView)
 
         statusTextView = TextView(this).apply {
-            text = "📁 እባክዎ ቪዲዮ መርጠው Upload ያድርጉ..."
-            textSize = 15f
+            text = "🎙️ አፑን አስነስቶ በሌላ ማጫወቻ ቪዲዮ ለመተርጎም ዝግጁ ነው..."
+            textSize = 16f
             setTextColor(Color.parseColor("#94A3B8"))
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 20)
+            setPadding(0, 0, 0, 40)
         }
         mainLayout.addView(statusTextView)
 
         translationTextView = TextView(this).apply {
-            text = "⏳ ቪዲዮው ሲጀምር ትክክለኛው ትርጉም እና ፈጣን ድምፅ እዚህ ይጫወታል..."
-            textSize = 17f
+            text = "🔊 ሌላ አፕ ላይ ቪዲዮ ሲከፍቱ የእንግሊዝኛው ድemጽ ቀንሶ አማርኛው እዚህ በከፍተኛ ድምፅ ይጮኻል።.."
+            textSize = 18f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.parseColor("#10B981"))
             gravity = Gravity.CENTER
@@ -81,73 +79,60 @@ class MainActivity : Activity() {
             val descDrawable = GradientDrawable().apply {
                 setColor(Color.parseColor("#1E293B"))
                 cornerRadius = 25f
-                setStroke(4, Color.parseColor("#F59E0B"))
+                setStroke(4, Color.parseColor("#3B82F6"))
             }
             background = descDrawable
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(0, 0, 0, 40) }
+            ).apply { setMargins(0, 0, 0, 50) }
         }
         mainLayout.addView(translationTextView)
 
-        val btnUploadVideo = Button(this).apply {
-            text = "📁 ቪዲዮ ምረጥ (Upload Video)"
+        val btnToggleListen = Button(this).apply {
+            text = "▶️ መተርጎም ጀምር (Start Translation System)"
             setTextColor(Color.WHITE)
             textSize = 16f
             setPadding(50, 40, 50, 40)
             val btnDrawable = GradientDrawable().apply {
-                setColor(Color.parseColor("#3B82F6"))
+                setColor(Color.parseColor("#10B981"))
                 cornerRadius = 25f
             }
             background = btnDrawable
         }
 
-        btnUploadVideo.setOnClickListener {
+        btnToggleListen.setOnClickListener {
             if (checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED) {
-                openVideoPicker()
+                if (!isListeningActive) {
+                    isListeningActive = true
+                    btnToggleListen.text = "⏹️ አቁም (Stop Translation System)"
+                    btnToggleListen.background = GradientDrawable().apply {
+                        setColor(Color.parseColor("#EF4444"))
+                        cornerRadius = 25f
+                    }
+                    statusTextView?.text = "🟢 አፑ በጀርባ እያዳመጠ ነው፤ አሁን ወደ ፈለጉት ቪዲዮ ማጫወቻ ይሂዱ..."
+                    statusTextView?.setTextColor(Color.parseColor("#10B981"))
+                    
+                    initSpeechRecognizer()
+                    startListeningEngine()
+                } else {
+                    isListeningActive = false
+                    btnToggleListen.text = "▶️ መተርጎም ጀምር (Start Translation System)"
+                    btnToggleListen.background = GradientDrawable().apply {
+                        setColor(Color.parseColor("#10B981"))
+                        cornerRadius = 25f
+                    }
+                    statusTextView?.text = "🛑 የአስተርጓሚው ሲስተም ቆሟል..."
+                    statusTextView?.setTextColor(Color.parseColor("#94A3B8"))
+                    stopSpeechEngine()
+                }
             } else {
                 requestPermissions(arrayOf("android.permission.RECORD_AUDIO"), 105)
             }
         }
-        mainLayout.addView(btnUploadVideo)
+        mainLayout.addView(btnToggleListen)
 
         setContentView(mainLayout)
-    }
-
-    private fun openVideoPicker() {
-        val intent = Intent(Intent.ACTION_PICK).apply {
-            type = "video/*"
-        }
-        startActivityForResult(intent, 110)
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 110 && resultCode == RESULT_OK && data != null) {
-            val videoUri: Uri? = data.data
-            if (videoUri != null) {
-                startPlayingAndTranslating(videoUri)
-            }
-        }
-    }
-
-    private fun startPlayingAndTranslating(uri: Uri) {
-        stopSpeechEngine()
-        lastSpokenText = ""
-        
-        statusTextView?.text = "🎬 የፈጣን Cloud Voice ማመሳሰል ሁነታ ነቅቷል..."
-        statusTextView?.setTextColor(Color.parseColor("#3B82F6"))
-
-        videoView?.setVideoURI(uri)
-        videoView?.setOnPreparedListener { mp ->
-            mp.setVolume(0f, 0f) // የእንግሊዝኛውን ድምፅ ማጥፋት
-            videoView?.start()
-            isVideoPlaying = true
-            
-            initSpeechRecognizer()
-            startListeningEngine()
-        }
     }
 
     private fun initSpeechRecognizer() {
@@ -167,7 +152,7 @@ class MainActivity : Activity() {
                 override fun onEndOfSpeech() {}
 
                 override fun onError(error: Int) {
-                    if (isVideoPlaying) {
+                    if (isListeningActive) {
                         mainHandler.postDelayed({ startListeningEngine() }, 10)
                     }
                 }
@@ -175,16 +160,14 @@ class MainActivity : Activity() {
                 override fun onResults(results: AndroidBundle?) {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
-                        // 🌟 ሙሉ ዓረፍተ ነገሩ ሲያልቅ ብቻ ወደ አማርኛ ድምፅ ይቀይረዋል (መዘግየት እና መደራረብን ያስቀራል)
                         translateAndSpeakOnline(matches[0], shouldSpeak = true)
                     }
-                    if (isVideoPlaying) startListeningEngine()
+                    if (isListeningActive) startListeningEngine()
                 }
 
                 override fun onPartialResults(partialResults: AndroidBundle?) {
                     val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
-                        // ⚡ ገና ሲናገር ጽሑፉን በቅጽበት በስክሪን ያሳያል፤ ግን ድምፅ አያወጣም (ግራ እንዳያጋባ)
                         translateAndSpeakOnline(matches[0], shouldSpeak = false)
                     }
                 }
@@ -195,7 +178,7 @@ class MainActivity : Activity() {
     }
 
     private fun startListeningEngine() {
-        if (isVideoPlaying) {
+        if (isListeningActive) {
             mainHandler.post {
                 try {
                     speechRecognizer?.startListening(recognizerIntent)
@@ -233,17 +216,16 @@ class MainActivity : Activity() {
 
                         mainHandler.post {
                             if (shouldSpeak) {
-                                translationTextView?.setTextColor(Color.parseColor("#F59E0B")) // ቢጫ ለቲተር
-                                translationTextView?.text = "🎙️ [እንግሊዝኛ]: \"$textToTranslate\"\n\n🔊 [አማርኛ Voice]:\n$amharicResult"
+                                translationTextView?.setTextColor(Color.parseColor("#F59E0B"))
+                                translationTextView?.text = "🎙️ [የሰማው እንግሊዝኛ]: \"$textToTranslate\"\n\n🔊 [አማርኛ Voice]:\n$amharicResult"
                                 
                                 if (amharicResult != lastSpokenText) {
                                     lastSpokenText = amharicResult
-                                    playAmharicAudioFromCloud(amharicResult)
+                                    requestAudioFocusAndSpeak(amharicResult)
                                 }
                             } else {
-                                // በከፊል የተሰማውን ጽሑፍ ብቻ በቅጽበት በአረንጓዴ ያሳያል
                                 translationTextView?.setTextColor(Color.parseColor("#10B981"))
-                                translationTextView?.text = "🎙️ [እየሰማ ነው...]: \"$textToTranslate\""
+                                translationTextView?.text = "🎙️ [እያዳመጠ ነው...]: \"$textToTranslate\""
                             }
                         }
                     }
@@ -252,10 +234,36 @@ class MainActivity : Activity() {
         }
     }
 
+    // 🎛️ ሌላው አፕ ላይ ያለው የቪዲዮ ድምፅ እንዲቀንስ (Duck እንዲያደርግ) ማዘዣ ዘዴ
+    private fun requestAudioFocusAndSpeak(textToSpeak: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                .setAcceptsDelayedFocusGain(true)
+                .setOnAudioFocusChangeListener { focusChange ->
+                    if (focusChange == AudioManager.AUDIOFOCUS_LOSS || focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+                        mediaPlayer?.stop()
+                    }
+                }
+                .build()
+            
+            audioFocusRequest?.let { audioManager?.requestAudioFocus(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager?.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+        }
+
+        playAmharicAudioFromCloud(textToSpeak)
+    }
+
     private fun playAmharicAudioFromCloud(textToSpeak: String) {
         thread {
             try {
-                // 🔄 የድሮው ድምፅ ገና ሳይጨርስ አዲስ ድምፅ ከመጣ ወዲያውኑ አቁሞ አዲሱን ማስጀመር
                 mediaPlayer?.let {
                     if (it.isPlaying) {
                         it.stop()
@@ -277,13 +285,22 @@ class MainActivity : Activity() {
                     setDataSource(ttsUrl)
                     prepare()
                     start()
+                    
+                    // 🔄 የአማርኛው ድምፅ ተናግሮ ሲጨርስ የሌላውን አፕ (የእንግሊዝኛውን ቪዲዮ) ድምፅ በራስ-ሰር መልሶ ከፍ ያደርገዋል
+                    setOnCompletionListener {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
+                        } else {
+                            @Suppress("DEPRECATION")
+                            audioManager?.abandonAudioFocus(null)
+                        }
+                    }
                 }
             } catch (e: Exception) {}
         }
     }
 
     private fun stopSpeechEngine() {
-        isVideoPlaying = false
         try {
             speechRecognizer?.stopListening()
             speechRecognizer?.destroy()
@@ -291,7 +308,12 @@ class MainActivity : Activity() {
             mediaPlayer?.stop()
             mediaPlayer?.release()
             mediaPlayer = null
-            videoView?.stopPlayback()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager?.abandonAudioFocus(null)
+            }
         } catch (e: Exception) {}
     }
 
