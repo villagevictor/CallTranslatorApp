@@ -13,6 +13,7 @@ import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
 import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
@@ -26,7 +27,7 @@ import java.net.URLEncoder
 import java.util.Locale
 import kotlin.concurrent.thread
 
-class MainActivity : Activity() {
+class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private var videoView: VideoView? = null
     private var statusTextView: TextView? = null
@@ -37,8 +38,16 @@ class MainActivity : Activity() {
     private var recognizerIntent: Intent? = null
     private var isVideoPlaying = false
 
+    // 🎙️ የአማርኛ ድምፅ ማውጫ ሞተር (TextToSpeech)
+    private var textToSpeech: TextToSpeech? = null
+    private var isTtsReady = false
+    private var lastSpokenText = ""
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 🚀 የድምፅ ሞተሩን በጀርባ ማስነሳት
+        textToSpeech = TextToSpeech(this, this)
 
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -67,7 +76,7 @@ class MainActivity : Activity() {
         mainLayout.addView(statusTextView)
 
         translationTextView = TextView(this).apply {
-            text = "⏳ ቪዲዮው ሲጀምር ጎግል AI በራሱ ሰምቶ በሰከንድ ውስጥ ወደ አማርኛ ይተረጉመዋል..."
+            text = "⏳ ቪዲዮው ሲጀምር የተረጎመውን በአማርኛ ድምፅ ያወራል።.."
             textSize = 17f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.parseColor("#10B981"))
@@ -76,7 +85,7 @@ class MainActivity : Activity() {
             val descDrawable = GradientDrawable().apply {
                 setColor(Color.parseColor("#1E293B"))
                 cornerRadius = 25f
-                setStroke(4, Color.parseColor("#10B981"))
+                setStroke(4, Color.parseColor("#F59E0B")) // በደማቅ ቢጫ ማሳመሪያ border
             }
             background = descDrawable
             layoutParams = LinearLayout.LayoutParams(
@@ -110,6 +119,27 @@ class MainActivity : Activity() {
         setContentView(mainLayout)
     }
 
+    // 🎙️ የ TextToSpeech ሞተር በተሳካ ሁኔታ ሲነሳ የሚሠራ
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            // የአማርኛ ቋንቋ ኮድ (am) መምረጥ
+            val amharicLocale = Locale("am", "ET")
+            val result = textToSpeech?.setLanguage(amharicLocale)
+            
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                isTtsReady = false
+                mainHandler.post {
+                    statusTextView?.text = "⚠️ ስልክዎ ላይ የአማርኛ የድምፅ ፓኬጅ አልተጫነም!"
+                    statusTextView?.setTextColor(Color.RED)
+                }
+            } else {
+                isTtsReady = true
+                // የድምፅ ፍጥነቱን መካከለኛ ማድረግ (እንዳይፈጥን)
+                textToSpeech?.setSpeechRate(0.9f)
+            }
+        }
+    }
+
     private fun openVideoPicker() {
         val intent = Intent(Intent.ACTION_PICK).apply {
             type = "video/*"
@@ -129,12 +159,15 @@ class MainActivity : Activity() {
 
     private fun startPlayingAndTranslating(uri: Uri) {
         stopSpeechEngine()
+        lastSpokenText = ""
         
-        statusTextView?.text = "🎬 የ Google AI Cloud የመተርጎም ሁነታ ነቅቷል..."
+        statusTextView?.text = "🎬 ቪዲዮው ድምፅ አልባ (Muted) ሆኗል፤ በአማርኛ Voice ይተረጎማል!..."
         statusTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
         videoView?.setVideoURI(uri)
         videoView?.setOnPreparedListener { mp ->
+            // 🔥 የቪዲዮውን የእንግሊዝኛ ድምፅ ሙሉ በሙሉ 0 በማድረግ ማጥፋት (Mute)
+            mp.setVolume(0f, 0f)
             videoView?.start()
             isVideoPlaying = true
             
@@ -168,7 +201,7 @@ class MainActivity : Activity() {
                 override fun onResults(results: AndroidBundle?) {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
-                        translateWithGoogleAI(matches[0])
+                        translateAndSpeak(matches[0])
                     }
                     if (isVideoPlaying) startListeningEngine()
                 }
@@ -176,7 +209,7 @@ class MainActivity : Activity() {
                 override fun onPartialResults(partialResults: AndroidBundle?) {
                     val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
-                        translateWithGoogleAI(matches[0])
+                        translateAndSpeak(matches[0])
                     }
                 }
 
@@ -195,8 +228,7 @@ class MainActivity : Activity() {
         }
     }
 
-    // 🌐 የ Google Translate ነፃ የ AI ትርጉም ኤፒአይ (API)
-    private fun translateWithGoogleAI(textToTranslate: String) {
+    private fun translateAndSpeak(textToTranslate: String) {
         if (textToTranslate.isEmpty()) return
 
         thread {
@@ -208,8 +240,7 @@ class MainActivity : Activity() {
                 con.requestMethod = "GET"
                 con.setRequestProperty("User-Agent", "Mozilla/5.0")
 
-                val responseCode = con.responseCode
-                if (responseCode == 200) {
+                if (con.responseCode == 200) {
                     val reader = BufferedReader(InputStreamReader(con.inputStream))
                     val response = StringBuilder()
                     var inputLine: String?
@@ -218,7 +249,6 @@ class MainActivity : Activity() {
                     }
                     reader.close()
 
-                    // የጉግልን የ JSON ምላሽ ሰባብሮ ትክክለኛውን የአማርኛ ዓረፍተ ነገር ማውጫ ዘዴ
                     val rawResponse = response.toString()
                     if (rawResponse.contains("\"")) {
                         val firstIndex = rawResponse.indexOf("\"") + 1
@@ -226,18 +256,17 @@ class MainActivity : Activity() {
                         val amharicResult = rawResponse.substring(firstIndex, secondIndex)
 
                         mainHandler.post {
-                            translationTextView?.setTextColor(Color.parseColor("#F59E0B")) // ወደ ቢጫ ይቀይራል
-                            translationTextView?.text = "🎙️ [የሰማው እንግሊዝኛ]:\n\"$textToTranslate\"\n\n🤖 [Google AI አውቶማቲክ ትርጉም]:\n$amharicResult"
+                            translationTextView?.text = "🎙️ [እንግሊዝኛ]: \"$textToTranslate\"\n\n🔊 [አማርኛ Voice]:\n$amharicResult"
+                            
+                            // 🔊 የአማርኛ ድምፅ ማውጫ - ተመሳሳይ ዓረፍተ ነገር ደጋግሞ እንዳይጮኽ መከላከያ
+                            if (isTtsReady && amharicResult != lastSpokenText) {
+                                lastSpokenText = amharicResult
+                                textToSpeech?.speak(amharicResult, TextToSpeech.QUEUE_FLUSH, null, null)
+                            }
                         }
                     }
                 }
-            } catch (e: Exception) {
-                // ኢንተርኔት ከሌለ የሰማውን እንግሊዝኛ ብቻ በአረንጓዴ ያሳያል
-                mainHandler.post {
-                    translationTextView?.setTextColor(Color.parseColor("#10B981"))
-                    translationTextView?.text = "🎙️ [የሰማው እንግሊዝኛ]:\n\"$textToTranslate\"\n⚠️ (ትርጉም ለመቀበል ኢንተርኔት ያብሩ)"
-                }
-            }
+            } catch (e: Exception) {}
         }
     }
 
@@ -247,12 +276,14 @@ class MainActivity : Activity() {
             speechRecognizer?.stopListening()
             speechRecognizer?.destroy()
             speechRecognizer = null
+            textToSpeech?.stop()
             videoView?.stopPlayback()
         } catch (e: Exception) {}
     }
 
     override fun onDestroy() {
         stopSpeechEngine()
+        textToSpeech?.shutdown()
         super.onDestroy()
     }
 }
