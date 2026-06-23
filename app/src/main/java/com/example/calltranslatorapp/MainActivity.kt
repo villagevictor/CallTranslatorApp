@@ -39,7 +39,6 @@ class MainActivity : Activity() {
     private var recognizerIntent: Intent? = null
     private var isVideoPlaying = false
 
-    // 🔊 የኦንላይን አማርኛ ድምፅ ማጫወቻ
     private var mediaPlayer: MediaPlayer? = null
     private var lastSpokenText = ""
 
@@ -73,7 +72,7 @@ class MainActivity : Activity() {
         mainLayout.addView(statusTextView)
 
         translationTextView = TextView(this).apply {
-            text = "⏳ ቪዲዮው ሲጀምር በኦንላይን አማርኛ ድምፅ (Cloud Voice) ይተረጎማል።.."
+            text = "⏳ ቪዲዮው ሲጀምር ትክክለኛው ትርጉም እና ፈጣን ድምፅ እዚህ ይጫወታል..."
             textSize = 17f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.parseColor("#10B981"))
@@ -137,7 +136,7 @@ class MainActivity : Activity() {
         stopSpeechEngine()
         lastSpokenText = ""
         
-        statusTextView?.text = "🎬 የ Cloud Amharic Voice ሁነታ ነቅቷል (ድምፅ አልባ)..."
+        statusTextView?.text = "🎬 የፈጣን Cloud Voice ማመሳሰል ሁነታ ነቅቷል..."
         statusTextView?.setTextColor(Color.parseColor("#3B82F6"))
 
         videoView?.setVideoURI(uri)
@@ -176,7 +175,8 @@ class MainActivity : Activity() {
                 override fun onResults(results: AndroidBundle?) {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
-                        translateAndSpeakOnline(matches[0])
+                        // 🌟 ሙሉ ዓረፍተ ነገሩ ሲያልቅ ብቻ ወደ አማርኛ ድምፅ ይቀይረዋል (መዘግየት እና መደራረብን ያስቀራል)
+                        translateAndSpeakOnline(matches[0], shouldSpeak = true)
                     }
                     if (isVideoPlaying) startListeningEngine()
                 }
@@ -184,7 +184,8 @@ class MainActivity : Activity() {
                 override fun onPartialResults(partialResults: AndroidBundle?) {
                     val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
-                        translateAndSpeakOnline(matches[0])
+                        // ⚡ ገና ሲናገር ጽሑፉን በቅጽበት በስክሪን ያሳያል፤ ግን ድምፅ አያወጣም (ግራ እንዳያጋባ)
+                        translateAndSpeakOnline(matches[0], shouldSpeak = false)
                     }
                 }
 
@@ -203,7 +204,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun translateAndSpeakOnline(textToTranslate: String) {
+    private fun translateAndSpeakOnline(textToTranslate: String, shouldSpeak: Boolean) {
         if (textToTranslate.isEmpty()) return
 
         thread {
@@ -231,11 +232,18 @@ class MainActivity : Activity() {
                         val amharicResult = rawResponse.substring(firstIndex, secondIndex)
 
                         mainHandler.post {
-                            translationTextView?.text = "🎙️ [እንግሊዝኛ]: \"$textToTranslate\"\n\n☁️ [Cloud አማርኛ Voice]:\n$amharicResult"
-                            
-                            if (amharicResult != lastSpokenText) {
-                                lastSpokenText = amharicResult
-                                playAmharicAudioFromCloud(amharicResult)
+                            if (shouldSpeak) {
+                                translationTextView?.setTextColor(Color.parseColor("#F59E0B")) // ቢጫ ለቲተር
+                                translationTextView?.text = "🎙️ [እንግሊዝኛ]: \"$textToTranslate\"\n\n🔊 [አማርኛ Voice]:\n$amharicResult"
+                                
+                                if (amharicResult != lastSpokenText) {
+                                    lastSpokenText = amharicResult
+                                    playAmharicAudioFromCloud(amharicResult)
+                                }
+                            } else {
+                                // በከፊል የተሰማውን ጽሑፍ ብቻ በቅጽበት በአረንጓዴ ያሳያል
+                                translationTextView?.setTextColor(Color.parseColor("#10B981"))
+                                translationTextView?.text = "🎙️ [እየሰማ ነው...]: \"$textToTranslate\""
                             }
                         }
                     }
@@ -244,12 +252,16 @@ class MainActivity : Activity() {
         }
     }
 
-    // 🌐 የአማርኛ ጽሑፉን ወደ ድምፅ ቀይሮ በኦንላይን የሚያጫውት ዘዴ
     private fun playAmharicAudioFromCloud(textToSpeak: String) {
         thread {
             try {
-                mediaPlayer?.stop()
-                mediaPlayer?.release()
+                // 🔄 የድሮው ድምፅ ገና ሳይጨርስ አዲስ ድምፅ ከመጣ ወዲያውኑ አቁሞ አዲሱን ማስጀመር
+                mediaPlayer?.let {
+                    if (it.isPlaying) {
+                        it.stop()
+                    }
+                    it.release()
+                }
                 mediaPlayer = null
 
                 val ttsUrl = "https://translate.google.com/translate_tts?ie=UTF-8&tl=am&client=tw-ob&q=" +
