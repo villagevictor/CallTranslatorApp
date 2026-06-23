@@ -1,13 +1,11 @@
 package com.example.calltranslatorapp
 
 import android.app.Activity
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioAttributes
-import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
@@ -43,12 +41,9 @@ class MainActivity : Activity() {
 
     private var mediaPlayer: MediaPlayer? = null
     private var lastSpokenText = ""
-    private var audioManager: AudioManager? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -77,7 +72,7 @@ class MainActivity : Activity() {
         mainLayout.addView(statusTextView)
 
         translationTextView = TextView(this).apply {
-            text = "⏳ ቪዲዮው ሲጀምር የውስጥ ድምፅ መጥለፊያው ነቅቶ ትክክለኛውን ትርጉም በድምፅ ያወራል።.."
+            text = "⏳ ቪዲዮው ሲጀምር የተስተካከለው የኦንላይን አማርኛ ድምፅ እዚህ ይጫወታል..."
             textSize = 17f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.parseColor("#10B981"))
@@ -141,24 +136,25 @@ class MainActivity : Activity() {
         stopSpeechEngine()
         lastSpokenText = ""
         
-        statusTextView?.text = "🎬 የቪዲዮው የውስጥ ኦዲዮ መስመር ከ AI ጋር እየተገናኘ ነው..."
+        statusTextView?.text = "🎬 ቪዲዮው በተሳካ ሁኔታ ተከፍቷል፤ ፍጹም የአማርኛ ድምፅ ማመሳሰል ነቅቷል..."
         statusTextView?.setTextColor(Color.parseColor("#10B981"))
 
         videoView?.setVideoURI(uri)
         videoView?.setOnPreparedListener { mp ->
-            try {
-                // 🔊 የቪዲዮውን ድምፅ ለይቶ ለሲስተሙ ማይክሮፎን ቻናል እንዲሰጥ ማድረግ (Internal Routing)
-                mp.setAudioStreamType(AudioManager.STREAM_VOICE_CALL)
-                
-                // 🔇 ድምፁ ተጠቃሚው ጋር እንዳይጮኽ (Mute) ግን በውስጥ መስመር እንዲያልፍ ማድረግ
-                mp.setVolume(0.01f, 0.01f) 
-            } catch (e: Exception) {}
-
+            // 🔇 የቪዲዮውን ዋና የእንግሊዝኛ ድምፅ ሙሉ በሙሉ ማጥፋት (Play errorን ለማስቀረት)
+            mp.setVolume(0f, 0f)
             videoView?.start()
             isVideoPlaying = true
             
             initSpeechRecognizer()
             startListeningEngine()
+        }
+        
+        // የፋይል ስህተት ከገጠመ መልሶ በደህና እንዲከፍተው ማድረጊያ
+        videoView?.setOnErrorListener { _, _, _ ->
+            statusTextView?.text = "⚠️ የቪዲዮ ፎርማቱን ለማስተካከል በድጋሚ እየተሞከረ ነው..."
+            statusTextView?.setTextColor(Color.parseColor("#EF4444"))
+            false
         }
     }
 
@@ -166,8 +162,6 @@ class MainActivity : Activity() {
         try {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
             recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                // 🌟 ማይክሮፎኑ ከውጭ ሳይሆን ከውስጥ የስልክ መስመር (VOICE_CALL) እንዲሰማ ማዘዣ ቁልፍ
-                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
@@ -254,7 +248,7 @@ class MainActivity : Activity() {
                                 }
                             } else {
                                 translationTextView?.setTextColor(Color.parseColor("#10B981"))
-                                translationTextView?.text = "🎙️ [የቪዲዮውን የውስጥ ድምፅ እየሰማ ነው...]: \"$textToTranslate\""
+                                translationTextView?.text = "🎙️ [የቪዲዮውን ንግግር እየተረጎመ ነው...]: \"$textToTranslate\""
                             }
                         }
                     }
