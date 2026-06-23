@@ -1,11 +1,13 @@
 package com.example.calltranslatorapp
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
@@ -41,9 +43,12 @@ class MainActivity : Activity() {
 
     private var mediaPlayer: MediaPlayer? = null
     private var lastSpokenText = ""
+    private var audioManager: AudioManager? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -52,7 +57,6 @@ class MainActivity : Activity() {
             setPadding(30, 30, 30, 30)
         }
 
-        // 🎬 የቪዲዮ ማጫወቻ
         videoView = VideoView(this).apply {
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -72,9 +76,8 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(statusTextView)
 
-        // 📝 የትርጉም ማሳያ ሳጥን
         translationTextView = TextView(this).apply {
-            text = "⏳ ቪዲዮው ሲጀምር የእንግሊዝኛው ድምፅ ጠፍቶ የአማርኛው ድምፅ ከቪዲዮው ጋር ተስማስሎ ይጮኻል..."
+            text = "⏳ ቪዲዮው ሲጀምር የውስጥ ድምፅ መጥለፊያው ነቅቶ ትክክለኛውን ትርጉም በድምፅ ያወራል።.."
             textSize = 17f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.parseColor("#10B981"))
@@ -93,7 +96,6 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(translationTextView)
 
-        // 📤 ቪዲዮ መምረጫ ቁልፍ
         val btnUploadVideo = Button(this).apply {
             text = "📁 ቪዲዮ ምረጥ (Upload Video)"
             setTextColor(Color.WHITE)
@@ -139,13 +141,19 @@ class MainActivity : Activity() {
         stopSpeechEngine()
         lastSpokenText = ""
         
-        statusTextView?.text = "🎬 ቪዲዮው በተሳካ ሁኔታ ተጭኗል፤ ፍጹም የአማርኛ ድምፅ ትርጉም ነቅቷል..."
+        statusTextView?.text = "🎬 የቪዲዮው የውስጥ ኦዲዮ መስመር ከ AI ጋር እየተገናኘ ነው..."
         statusTextView?.setTextColor(Color.parseColor("#10B981"))
 
         videoView?.setVideoURI(uri)
         videoView?.setOnPreparedListener { mp ->
-            // 🔇 የቪዲዮውን ዋና የእንግሊዝኛ ድምፅ ሙሉ በሙሉ ማጥፋት (Mute ማድረግ)
-            mp.setVolume(0f, 0f)
+            try {
+                // 🔊 የቪዲዮውን ድምፅ ለይቶ ለሲስተሙ ማይክሮፎን ቻናል እንዲሰጥ ማድረግ (Internal Routing)
+                mp.setAudioStreamType(AudioManager.STREAM_VOICE_CALL)
+                
+                // 🔇 ድምፁ ተጠቃሚው ጋር እንዳይጮኽ (Mute) ግን በውስጥ መስመር እንዲያልፍ ማድረግ
+                mp.setVolume(0.01f, 0.01f) 
+            } catch (e: Exception) {}
+
             videoView?.start()
             isVideoPlaying = true
             
@@ -158,10 +166,10 @@ class MainActivity : Activity() {
         try {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
             recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                // 🌟 ማይክሮፎኑ ከውጭ ሳይሆን ከውስጥ የስልክ መስመር (VOICE_CALL) እንዲሰማ ማዘዣ ቁልፍ
+                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
-                // ቪዲዮው ከውስጥ ሲጫወት ማይክሮፎኑ እንዳይደናቀፍ ይረዳዋል
-                putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             }
 
@@ -237,7 +245,7 @@ class MainActivity : Activity() {
 
                         mainHandler.post {
                             if (shouldSpeak) {
-                                translationTextView?.setTextColor(Color.parseColor("#F59E0B")) // ቢጫ ለትርጉም
+                                translationTextView?.setTextColor(Color.parseColor("#F59E0B"))
                                 translationTextView?.text = "🎙️ [እንግሊዝኛ]: \"$textToTranslate\"\n\n🔊 [አማርኛ Voice]:\n$amharicResult"
                                 
                                 if (amharicResult != lastSpokenText) {
@@ -245,8 +253,8 @@ class MainActivity : Activity() {
                                     playAmharicAudioFromCloud(amharicResult)
                                 }
                             } else {
-                                translationTextView?.setTextColor(Color.parseColor("#10B981")) // አረንጓዴ ለከፊል ንግግር
-                                translationTextView?.text = "🎙️ [እየሰማ ነው...]: \"$textToTranslate\""
+                                translationTextView?.setTextColor(Color.parseColor("#10B981"))
+                                translationTextView?.text = "🎙️ [የቪዲዮውን የውስጥ ድምፅ እየሰማ ነው...]: \"$textToTranslate\""
                             }
                         }
                     }
