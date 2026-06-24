@@ -1,21 +1,15 @@
 package com.example.calltranslatorapp
 
 import android.app.Activity
-import android.content.ContentValues
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioAttributes
-import android.media.MediaExtractor
-import android.media.MediaFormat
-import android.media.MediaMuxer
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
-import android.provider.MediaStore
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -33,7 +27,6 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import java.nio.ByteBuffer
 import java.util.Locale
 import kotlin.concurrent.thread
 
@@ -43,17 +36,13 @@ class MainActivity : Activity() {
     private var statusTextView: TextView? = null
     private var translationTextView: TextView? = null
     private var progressBar: ProgressBar? = null
-    private var btnDownloadVideo: Button? = null
     
     private val mainHandler = Handler(Looper.getMainLooper())
     private var mediaPlayer: MediaPlayer? = null
     private var speechRecognizer: SpeechRecognizer? = null
     
     private var isProcessing = false
-    private var localAudioFile: File? = null
-    private var selectedVideoUri: Uri? = null
-    private val extractedSentences = ArrayList<String>()
-    private val amharicTranslations = ArrayList<String>()
+    private var audioIndex = 0
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,6 +54,7 @@ class MainActivity : Activity() {
             setPadding(30, 30, 30, 30)
         }
 
+        // 🎬 ኦንላይን በቀጥታ የሚጫወትበት የቪዲዮ ማሳያ
         videoView = VideoView(this).apply {
             val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 700)
             lp.setMargins(0, 0, 0, 30)
@@ -73,7 +63,7 @@ class MainActivity : Activity() {
         mainLayout.addView(videoView)
 
         statusTextView = TextView(this).apply {
-            text = "📁 እባክዎ የእንግሊዝኛ ቪዲዮ መርጠው Upload ያድርጉ..."
+            text = "📁 እባክዎ የእንግሊዝኛ ቪዲዮ ይምረጡ..."
             textSize = 15f
             setTextColor(Color.parseColor("#94A3B8"))
             gravity = Gravity.CENTER
@@ -90,8 +80,9 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(progressBar)
 
+        // 🎙️ የቀጥታ ትርጉም ማሳያ ሰሌዳ
         translationTextView = TextView(this).apply {
-            text = "⏳ ቪዲዮው ሲጫን አፑ የእንግሊዝኛውን ንግግር ፈልፍሎ በ % እየቆጠረ በትክክል ይተረጉመዋል..."
+            text = "⚡ ቪዲዮው ሲጀምር አፑ ንግግሩን እየተከተለ በቀጥታ በአማርኛ ድምፅ መናገር ይጀምራል..."
             textSize = 16f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.parseColor("#10B981"))
@@ -109,7 +100,7 @@ class MainActivity : Activity() {
         mainLayout.addView(translationTextView)
 
         val btnUploadVideo = Button(this).apply {
-            text = "📁 ቪዲዮ ስቀል (Upload Video)"
+            text = "📁 ቪዲዮ ስቀልና በቀጥታ በአማርኛ አጫውት"
             setTextColor(Color.WHITE)
             textSize = 16f
             setPadding(50, 40, 50, 40)
@@ -120,19 +111,6 @@ class MainActivity : Activity() {
         }
         btnUploadVideo.setOnClickListener { openVideoPicker() }
         mainLayout.addView(btnUploadVideo)
-
-        btnDownloadVideo = Button(this).apply {
-            text = "💾 የተረጎመውን ቪዲዮ ወደ ስልክ አውርድ (Download Video)"
-            setTextColor(Color.WHITE)
-            textSize = 16f
-            setPadding(50, 40, 50, 40)
-            visibility = View.GONE
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#10B981"))
-                cornerRadius = 25f
-            }
-        }
-        mainLayout.addView(btnDownloadVideo)
 
         setContentView(mainLayout)
     }
@@ -146,34 +124,33 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 110 && resultCode == RESULT_OK && data != null) {
             data.data?.let { uri ->
-                selectedVideoUri = uri
-                startRealVideoTranslation(uri)
+                startLiveStreamingTranslation(uri)
             }
         }
     }
 
-    private fun startRealVideoTranslation(uri: Uri) {
-        if (isProcessing) return
+    // 🚀 ቪዲዮው ሲጫን የእንግሊዝኛውን አጥፍቶ (Mute) ኦንላይን መተርጎም ይጀምራል
+    private fun startLiveStreamingTranslation(uri: Uri) {
         isProcessing = true
-        extractedSentences.clear()
-        amharicTranslations.clear()
-        
+        audioIndex = 0
         progressBar?.visibility = View.VISIBLE
         progressBar?.progress = 0
-        btnDownloadVideo?.visibility = View.GONE
         
-        statusTextView?.text = "⚡ የቪዲዮውን እውነተኛ ድምፅ በመተንተን ላይ ነው..."
+        statusTextView?.text = "📢 የእንግሊዝኛውን ድምፅ አጥፍቼ በአማርኛ ድምፅ እየተካሁት ነው..."
         statusTextView?.setTextColor(Color.parseColor("#F59E0B"))
 
         videoView?.setVideoURI(uri)
         videoView?.setOnPreparedListener { mp ->
-            mp.setVolume(0.05f, 0.05f) // የእንግሊዝኛውን ድምፅ በከፍተኛ ሁኔታ ይቀንሳል
+            mp.setVolume(0f, 0f) // 🔇 የቪዲዮውን የእንግሊዝኛ ድምፅ ሙሉ በሙሉ ያጠፋዋል!
             videoView?.start()
-            startLiveSpeechExtraction()
+            startRealtimeSpeechListening()
         }
     }
 
-    private fun startLiveSpeechExtraction() {
+    // 🎙️ ቪዲዮው ሲጫወት ንግግሩን በሪልታይም መስማት
+    private fun startRealtimeSpeechListening() {
+        if (videoView == null || !videoView!!.isPlaying) return
+        
         mainHandler.post {
             try {
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
@@ -188,51 +165,51 @@ class MainActivity : Activity() {
                     override fun onRmsChanged(rmsdB: Float) {}
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
-                    override fun onError(error: Int) { processNextChunkOrFinish() }
+                    override fun onError(error: Int) { checkNextLiveChunk() }
 
                     override fun onResults(results: Bundle?) {
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
-                            val realEnglish = matches[0]
-                            extractedSentences.add(realEnglish)
+                            val englishChunk = matches[0]
                             
                             thread {
-                                val amharic = translateOnline(realEnglish)
-                                amharicTranslations.add(amharic)
+                                // 1. ወዲያውኑ ኦንላይን ይተረጉመዋል
+                                val amharicTranslation = translateOnline(englishChunk)
+                                
+                                // 2. የአማርኛውን ድምፅ ወዲያውኑ ያመነጫል
+                                val liveAudio = downloadSingleAudioTrack(amharicTranslation)
                                 
                                 mainHandler.post {
-                                    val progress = (videoView!!.currentPosition * 100) / videoView!!.duration
-                                    progressBar?.progress = progress
-                                    statusTextView?.text = "⏳ ቪዲዮው በትክክል እየተተረጎመ ነው... $progress%"
-                                    translationTextView?.text = "🎙️ [የቪዲዮው እውነተኛ ንግግር]:\n\"$realEnglish\"\n\n🔄 [ትክክለኛ አማርኛ]: $amharic"
+                                    if (videoView != null && videoView!!.isPlaying) {
+                                        val progress = (videoView!!.currentPosition * 100) / videoView!!.duration
+                                        progressBar?.progress = progress
+                                        
+                                        translationTextView?.text = "🎙️ [ኦሪጅናል ንግግር]: \"$englishChunk\"\n\n🔄 [የቀጥታ አማርኛ ትርጉም]: $amharicTranslation"
+                                        
+                                        // 3. ቪዲዮውን እየተከተለ በአማርኛ ይናገራል!
+                                        playLiveAmharicVoice(liveAudio)
+                                    }
                                 }
                             }
                         }
-                        processNextChunkOrFinish()
+                        checkNextLiveChunk()
                     }
                     override fun onPartialResults(partialResults: Bundle?) {}
                     override fun onEvent(eventType: Int, params: Bundle?) {}
                 })
                 speechRecognizer?.startListening(intent)
-            } catch (e: Exception) { processNextChunkOrFinish() }
+            } catch (e: Exception) { checkNextLiveChunk() }
         }
     }
 
-    private fun processNextChunkOrFinish() {
+    private fun checkNextLiveChunk() {
         if (videoView != null && videoView!!.isPlaying) {
-            startLiveSpeechExtraction()
+            startRealtimeSpeechListening()
         } else {
             progressBar?.progress = 100
-            thread {
-                downloadAmharicAudioTracks(amharicTranslations)
-                mainHandler.post {
-                    isProcessing = false
-                    statusTextView?.text = "🎉 ትርጉሙ 100% ተጠናቋል! ወደ ስልክህ ማውረድ ትችላለህ..."
-                    statusTextView?.setTextColor(Color.parseColor("#10B981"))
-                    btnDownloadVideo?.visibility = View.VISIBLE
-                    btnDownloadVideo?.setOnClickListener { saveSafeVideoToGallery() }
-                }
-            }
+            statusTextView?.text = "🎉 የቪዲዮው ቀጥታ የአማርኛ ትርጉም በተሳካ ሁኔታ ተጠናቋል!"
+            statusTextView?.setTextColor(Color.parseColor("#10B981"))
+            isProcessing = false
         }
     }
 
@@ -247,96 +224,38 @@ class MainActivity : Activity() {
                 val start = res.indexOf("\"") + 1
                 val end = res.indexOf("\"", start)
                 res.substring(start, end)
-            } else "ተርጓሚው መስራት አልቻለም"
-        } catch (e: Exception) { "የመገናኛ ስህተት" }
+            } else "..."
+        } catch (e: Exception) { "..." }
     }
 
-    private fun downloadAmharicAudioTracks(sentences: List<String>) {
+    private fun downloadSingleAudioTrack(text: String): File? {
+        return try {
+            audioIndex++
+            val audioFile = File(cacheDir, "live_track_$audioIndex.mp3")
+            val url = URL("https://translate.google.com/translate_tts?ie=UTF-8&tl=am&client=tw-ob&q=" + URLEncoder.encode(text, "UTF-8"))
+            val con = url.openConnection() as HttpURLConnection
+            con.setRequestProperty("User-Agent", "Mozilla/5.0")
+            if (con.responseCode == 200) {
+                val fos = FileOutputStream(audioFile)
+                con.inputStream.copyTo(fos)
+                fos.close()
+                audioFile
+            } else null
+        } catch (e: Exception) { null }
+    }
+
+    // 🔊 ቪዲዮውን እየተከተለ በአማርኛ ድምፅ እንዲናገር ማድረጊያ ሞተር
+    private fun playLiveAmharicVoice(audioFile: File?) {
+        if (audioFile == null || !audioFile.exists()) return
         try {
-            localAudioFile = File(cacheDir, "final_amharic.mp3")
-            val fos = FileOutputStream(localAudioFile)
-            for (text in sentences) {
-                val url = URL("https://translate.google.com/translate_tts?ie=UTF-8&tl=am&client=tw-ob&q=" + URLEncoder.encode(text, "UTF-8"))
-                val con = url.openConnection() as HttpURLConnection
-                con.setRequestProperty("User-Agent", "Mozilla/5.0")
-                if (con.responseCode == 200) {
-                    con.inputStream.copyTo(fos)
-                }
+            mediaPlayer?.release()
+            mediaPlayer = MediaPlayer().apply {
+                setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).setUsage(AudioAttributes.USAGE_MEDIA).build())
+                setDataSource(audioFile.absolutePath)
+                prepare()
+                start()
             }
-            fos.close()
         } catch (e: Exception) {}
-    }
-
-    // 安全な保存方法 (The Safest and Most Reliable Method for Android Gallery Storage)
-    private fun saveSafeVideoToGallery() {
-        if (selectedVideoUri == null || localAudioFile == null || !localAudioFile!!.exists()) return
-        statusTextView?.text = "💾 የተተረጎመውን ቪዲዮ ወደ ስልክህ 'Movies' ፎልደር እያወረድኩ ነው..."
-
-        thread {
-            try {
-                val timestamp = System.currentTimeMillis()
-                val contentResolver = contentResolver
-
-                // 1. ኦሪጅናሉን ቪዲዮ ወደ ስልክ ማውረድ
-                val videoDetails = ContentValues().apply {
-                    put(MediaStore.Video.Media.DISPLAY_NAME, "Amharic_Translated_Video_$timestamp.mp4")
-                    put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                    put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/CallTranslator")
-                }
-                val videoCollection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-                val finalVideoUri = contentResolver.insert(videoCollection, videoDetails)
-
-                if (finalVideoUri != null) {
-                    val pfdOut = contentResolver.openFileDescriptor(finalVideoUri, "w")
-                    val fos = FileOutputStream(pfdOut!!.fileDescriptor)
-                    val inputStream = contentResolver.openInputStream(selectedVideoUri!!)
-                    inputStream?.copyTo(fos)
-                    inputStream?.close()
-                    fos.close()
-                    pfdOut.close()
-                }
-
-                // 2. የአማርኛውን ድምፅ ለብቻው እዚያው ፎልደር ውስጥ ማውረድ
-                val audioDetails = ContentValues().apply {
-                    put(MediaStore.Audio.Media.DISPLAY_NAME, "Amharic_Audio_$timestamp.mp3")
-                    put(MediaStore.Audio.Media.MIME_TYPE, "audio/mp3")
-                    put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/CallTranslator")
-                }
-                val audioCollection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-                val finalAudioUri = contentResolver.insert(audioCollection, audioDetails)
-
-                if (finalAudioUri != null) {
-                    val pfdAudioOut = contentResolver.openFileDescriptor(finalAudioUri, "w")
-                    val fosAudio = FileOutputStream(pfdAudioOut!!.fileDescriptor)
-                    localAudioFile!!.inputStream().use { it.copyTo(fosAudio) }
-                    fosAudio.close()
-                    pfdAudioOut.close()
-                }
-
-                mainHandler.post {
-                    statusTextView?.text = "🎉 ማውረድ 100% ተጠናቋል! አሁን የተተረጎመው ቪዲዮ በአማርኛ ድምፅ እየተጫወተ ነው..."
-                    statusTextView?.setTextColor(Color.parseColor("#10B981"))
-                    
-                    // 🎬 የወረደውን ቪዲዮ እና አዲሱን የአማርኛ ድምፅ ፍጹም በሆነ ሁኔታ አቀናጅቶ ማጫወት
-                    videoView?.setVideoURI(finalVideoUri)
-                    videoView?.setOnPreparedListener { mp ->
-                        mp.setVolume(0f, 0f) // የእንግሊዝኛውን ድምፅ ያጠፋል
-                        videoView?.start()
-                        
-                        // የአማርኛውን ድምፅ በአንድ ላይ ማስጀመር
-                        mediaPlayer?.release()
-                        mediaPlayer = MediaPlayer().apply {
-                            setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).setUsage(AudioAttributes.USAGE_MEDIA).build())
-                            setDataSource(localAudioFile!!.absolutePath)
-                            prepare()
-                            start()
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                mainHandler.post { statusTextView?.text = "⚠️ ማውረድ አልተሳካም፤ እባክዎ እንደገና ይሞክሩ።" }
-            }
-        }
     }
 
     override fun onDestroy() {
