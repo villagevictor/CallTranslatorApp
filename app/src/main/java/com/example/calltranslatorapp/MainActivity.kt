@@ -7,6 +7,9 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioAttributes
+import android.media.MediaExtractor
+import android.media.MediaFormat
+import android.media.MediaMuxer
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
@@ -31,6 +34,7 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.nio.ByteBuffer
 import java.util.Locale
 import kotlin.concurrent.thread
 
@@ -78,7 +82,6 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(statusTextView)
 
-        // 📊 የፐርሰንት መቁጠሪያ ባር (ስማርት ካስት ስህተት የተስተካከለበት)
         progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             val progressLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 30)
             progressLp.setMargins(0, 0, 0, 30)
@@ -88,7 +91,6 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(progressBar)
 
-        // 📝 የትርጉም ማሳያ ሰሌዳ (ስማርት ካስት ስህተት የተስተካከለበት)
         translationTextView = TextView(this).apply {
             text = "⏳ ቪዲዮው ሲጫን አፑ የእንግሊዝኛውን ንግግር ፈልፍሎ በ % እየቆጠረ በትክክል ይተረጉመዋል..."
             textSize = 16f
@@ -166,7 +168,7 @@ class MainActivity : Activity() {
 
         videoView?.setVideoURI(uri)
         videoView?.setOnPreparedListener { mp ->
-            mp.setVolume(0.01f, 0.01f)
+            mp.setVolume(0.1f, 0.1f) // 🔊 የእንግሊዝኛውን ድምፅ ቀንሶ ያጫውታል
             videoView?.start()
             startLiveSpeechExtraction()
         }
@@ -229,7 +231,7 @@ class MainActivity : Activity() {
                     statusTextView?.text = "🎉 ትርጉሙ 100% ተጠናቋል! ወደ ስልክህ ማውረድ ትችላለህ..."
                     statusTextView?.setTextColor(Color.parseColor("#10B981"))
                     btnDownloadVideo?.visibility = View.VISIBLE
-                    btnDownloadVideo?.setOnClickListener { saveVideoToGallery() }
+                    btnDownloadVideo?.setOnClickListener { saveDubbedVideoToGallery() }
                 }
             }
         }
@@ -266,15 +268,85 @@ class MainActivity : Activity() {
         } catch (e: Exception) {}
     }
 
-    private fun saveVideoToGallery() {
-        if (selectedVideoUri == null) return
-        statusTextView?.text = "💾 ቪዲዮው ወደ ስልክህ 'Movies' ፎልደር ውስጥ እየወረደ ነው..."
+    // 🎬 ቪዲዮውን እና አዲሱን የአማርኛ ድምፅ አዋህዶ (Mux አድርጎ) እውነተኛ የተተረጎመ ቪዲዮ የማውረጃ ማሽን
+    private fun saveDubbedVideoToGallery() {
+        if (selectedVideoUri == null || localAudioFile == null || !localAudioFile!!.exists()) return
+        statusTextView?.text = "💾 ቪዲዮውን ከአማርኛ ድምፅ ጋር እያዋሃድኩ ወደ ጋለሪህ እያወረድኩ ነው..."
 
         thread {
             try {
-                val contentResolver = contentResolver
+                val tempOutputFile = File(cacheDir, "output_dubbed.mp4")
+                if (tempOutputFile.exists()) tempOutputFile.delete()
+
+                val muxer = MediaMuxer(tempOutputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+
+                // 1. የኦሪጅናሉን ቪዲዮ ምስል (Video Track) መፈልፈል
+                val videoExtractor = MediaExtractor()
+                val pfdIn = contentResolver.openFileDescriptor(selectedVideoUri!!, "r")
+                videoExtractor.setDataSource(pfdIn!!.fileDescriptor)
+
+                var videoTrackIndex = -1
+                var videoFormat: MediaFormat? = null
+
+                for (i in 0 until videoExtractor.trackCount) {
+                    val format = videoExtractor.getTrackFormat(i)
+                    val mime = format.getString(MediaFormat.KEY_MIME)
+                    if (mime != null && mime.startsWith("video/")) {
+                        videoTrackIndex = i
+                        videoFormat = format
+                        break
+                    }
+                }
+
+                if (videoTrackIndex == -1 || videoFormat == null) {
+                    mainHandler.post { statusTextView?.text = "⚠️ የቪዲዮውን ምስል ማግኘት አልተቻለም።" }
+                    return@thread
+                }
+
+                videoExtractor.selectTrack(videoTrackIndex)
+                val newVideoTrack = muxer.addTrack(videoFormat)
+
+                // 2. አዲሱን የአማርኛ ኦዲዮ (Audio Track) ማዘጋጀት
+                val audioExtractor = MediaExtractor()
+                audioExtractor.setDataSource(localAudioFile!!.absolutePath)
+                audioExtractor.selectTrack(0)
+                val audioFormat = audioExtractor.getTrackFormat(0)
+                val newAudioTrack = muxer.addTrack(audioFormat)
+
+                muxer.start()
+
+                // 3. የቪዲዮውን ምስል ወደ አዲሱ ፋይል መጻፍ
+                val buffer = ByteBuffer.allocate(1024 * 1024)
+                val bufferInfo = android.media.MediaCodec.BufferInfo()
+
+                while (true) {
+                    bufferInfo.size = videoExtractor.readSampleData(buffer, 0)
+                    if (bufferInfo.size < 0) break
+                    bufferInfo.presentationTimeUs = videoExtractor.sampleTime
+                    bufferInfo.flags = videoExtractor.sampleFlags
+                    muxer.writeSampleData(newVideoTrack, buffer, bufferInfo)
+                    videoExtractor.advance()
+                }
+
+                // 4. የአማርኛውን ድምፅ ወደ አዲሱ ቪዲዮ መጻፍ
+                while (true) {
+                    bufferInfo.size = audioExtractor.readSampleData(buffer, 0)
+                    if (bufferInfo.size < 0) break
+                    bufferInfo.presentationTimeUs = audioExtractor.sampleTime
+                    bufferInfo.flags = audioExtractor.sampleFlags
+                    muxer.writeSampleData(newAudioTrack, buffer, bufferInfo)
+                    audioExtractor.advance()
+                }
+
+                muxer.stop()
+                muxer.release()
+                videoExtractor.release()
+                audioExtractor.release()
+                pfdIn.close()
+
+                // 5. የተዘጋጀውን እውነተኛ የአማርኛ ቪዲዮ ወደ ጋለሪ (Movies) መገልበጥ
                 val videoDetails = ContentValues().apply {
-                    put(MediaStore.Video.Media.DISPLAY_NAME, "Translated_Amharic_Video_${System.currentTimeMillis()}.mp4")
+                    put(MediaStore.Video.Media.DISPLAY_NAME, "Dubbed_Amharic_Video_${System.currentTimeMillis()}.mp4")
                     put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
                     put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/CallTranslator")
                 }
@@ -283,45 +355,27 @@ class MainActivity : Activity() {
                 val finalVideoUri = contentResolver.insert(collection, videoDetails)
 
                 if (finalVideoUri != null) {
-                    val pfd = contentResolver.openFileDescriptor(finalVideoUri, "w")
-                    val fos = FileOutputStream(pfd!!.fileDescriptor)
-                    
-                    val inputStream = contentResolver.openInputStream(selectedVideoUri!!)
-                    inputStream?.copyTo(fos)
-                    inputStream?.close()
+                    val pfdOut = contentResolver.openFileDescriptor(finalVideoUri, "w")
+                    val fos = FileOutputStream(pfdOut!!.fileDescriptor)
+                    tempOutputFile.inputStream().use { it.copyTo(fos) }
                     fos.close()
-                    pfd.close()
+                    pfdOut.close()
 
                     mainHandler.post {
-                        statusTextView?.text = "🎉 ቪዲዮው በተሳካ ሁኔታ ወደ ስልክህ ወርዷል (Saved to Gallery)!"
+                        statusTextView?.text = "🎉 እውነተኛ የተተረጎመ የአማርኛ ቪዲዮ ወደ ጋለሪህ (Movies) ወርዷል!"
                         statusTextView?.setTextColor(Color.parseColor("#10B981"))
                         
+                        // የወረደውን ቪዲዮ በቀጥታ ማጫወት
                         videoView?.setVideoURI(finalVideoUri)
                         videoView?.setOnPreparedListener { mp ->
-                            mp.setVolume(0f, 0f)
+                            mp.setVolume(1f, 1f) // አሁን አዲሱ የአማርኛ ድምፅ ከቪዲዮው ጋር አብሮ ይጮኻል!
                             videoView?.start()
-                            playOfflineAmharicAudio()
                         }
                     }
                 }
             } catch (e: Exception) {
                 mainHandler.post { statusTextView?.text = "⚠️ ማውረድ አልተሳካም፤ እባክዎ እንደገና ይሞክሩ።" }
             }
-        }
-    }
-
-    private fun playOfflineAmharicAudio() {
-        if (localAudioFile == null || !localAudioFile!!.exists()) return
-        thread {
-            try {
-                mediaPlayer?.release()
-                mediaPlayer = MediaPlayer().apply {
-                    setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).setUsage(AudioAttributes.USAGE_MEDIA).build())
-                    setDataSource(localAudioFile!!.absolutePath)
-                    prepare()
-                    start()
-                }
-            } catch (e: Exception) {}
         }
     }
 
