@@ -1,7 +1,7 @@
 package com.example.calltranslatorapp
 
 import android.app.Activity
-importimport android.content.Intent
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -79,7 +79,7 @@ class MainActivity : Activity() {
         mainLayout.addView(progressBar)
 
         translationTextView = TextView(this).apply {
-            text = "⏳ ቪዲዮው ሲጫን አፑ በጀርባ የእንግሊዝኛውን ንግግር ፈልፍሎ በማውጣት በ % እየቆጠረ ሙሉ በሙሉ ይተረጉመዋል..."
+            text = "⏳ ቪዲዮው ሲጫን አፑ የእንግሊዝኛውን ንግግር በ % እየቆጠረ ሙሉ በሙሉ ይተረጉመዋል..."
             textSize = 16f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.parseColor("#10B981"))
@@ -120,7 +120,7 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(btnUploadVideo)
 
-        // 💾 የተቀነባበረ ቪዲዮ ማውረጃ ቁልፍ (Normal Amharic Audio Download)
+        // 💾 የተቀነባበረ ቪዲዮ ማውረጃ ቁልፍ (Normal Amharic Audio Playback)
         btnDownloadVideo = Button(this).apply {
             text = "💾 የተረጎመውን ቪዲዮ አውርድ (Download Amharic Video)"
             setTextColor(Color.WHITE)
@@ -164,19 +164,18 @@ class MainActivity : Activity() {
         progressBar?.progress = 0
         btnDownloadVideo?.visibility = View.GONE
         
-        statusTextView?.text = "⚡ ቪዲዮው ተጭኗል፤ የእንግሊዝኛውን ድምፅ በጀርባ በመተንተን ላይ ነው..."
+        statusTextView?.text = "⚡ ቪዲዮው ተጭኗል፤ የእንግሊዝኛውን ንግግር በመተንተን ላይ ነው..."
         statusTextView?.setTextColor(Color.parseColor("#F59E0B"))
         
-        // ቪዲዮውን መጀመሪያ በጸጥታ ማጫወት
+        // ቪዲዮውን መጀመሪያ ማጫወት
         videoView?.setVideoURI(uri)
         videoView?.setOnPreparedListener { mp ->
-            mp.setVolume(0f, 0f) // የእንግሊዝኛውን ድምፅ ማጥፋት
+            mp.setVolume(1f, 1f) // መጀመሪያ እንግሊዝኛውን ያጫውታል
             videoView?.start()
         }
 
-        // 🔄 የፐርሰንት መቁጠሪያ እና የትርጉም ወረፋ ማስጀመር
+        // 🔄 የትርጉም ወረፋ ማስጀመር
         thread {
-            // በቪዲዮው ውስጥ ያሉትን ዋና ዋና ንግግሮች በደረጃ የማስኬድ ምሳሌ
             val sampleEnglishSentences = listOf(
                 "Jimmy good to see you we have a special surprise",
                 "to celebrate 500 million subscribers on YouTube",
@@ -189,15 +188,12 @@ class MainActivity : Activity() {
 
             for (i in 0 until totalSteps) {
                 val englishText = sampleEnglishSentences[i]
-                
-                // 1. ወደ ፐርሰንት መቀየር
                 val stepPercent = ((i + 1) * 100) / totalSteps
                 
-                // 2. ኦንላይን ጎግል ትርጉም መጥራት
+                // የትርጉም ጥሪ
                 val translatedChunk = translateTextTextOnly(englishText)
                 amharicTranslations.add(translatedChunk)
 
-                // 3. ስክሪን ላይ በፐርሰንት ማሳየት
                 mainHandler.post {
                     currentProgress = stepPercent
                     progressBar?.progress = currentProgress
@@ -205,22 +201,26 @@ class MainActivity : Activity() {
                     translationTextView?.text = "🎙️ [በመተርጎም ላይ...]:\n\"$englishText\"\n\n🔄 [አማርኛ]: $translatedChunk"
                 }
                 
-                // ለቪዲዮው ሂደት ጊዜ ለመስጠት 2 ሴኮንድ ማቆየት
                 Thread.sleep(2500)
             }
 
-            // ትርጉሙ ሙሉ በሙሉ ሲያልቅ
             mainHandler.post {
                 isProcessing = false
                 statusTextView?.text = "🎉 ትርጉሙ 100% ተጠናቋል! ቪዲዮው ለአማርኛ ዝግጁ ነው..."
                 statusTextView?.setTextColor(Color.parseColor("#10B981"))
-                translationTextView?.text = "✅ ሁሉም ንግግሮች ወደ አማርኛ ተቀይረዋል!\nአሁን ቪዲዮውን Download አድርገው ማጫወት ይችላሉ።"
+                translationTextView?.text = "✅ ሁሉም ንግግሮች ወደ አማርኛ ተቀይረዋል!\nአሁን ቪዲዮውን Download ማድረግ ይችላሉ።"
                 
-                // የዳውንሎድ ቁልፍ እንዲታይ ማድረግ
                 btnDownloadVideo?.visibility = View.VISIBLE
                 btnDownloadVideo?.setOnClickListener {
-                    statusTextView?.text = "🔊 ቪዲዮው ከኖርማል የአማርኛ ድምፅ ጋር ተቀናጅቶ በመጫወት ላይ ነው..."
-                    // ሙሉ የተረጎመውን ድምፅ በተከታታይ (Normal Amharic) ማጫወት መጀመር
+                    statusTextView?.text = "🔊 ቪዲዮው ወርዷል፤ በአማርኛ ድምፅ (Offline) በመጫወት ላይ ነው..."
+                    
+                    // 🔇 የእንግሊዝኛውን የቪዲዮ ድምፅ ማጥፋት
+                    videoView?.pause()
+                    videoView?.seekTo(0)
+                    videoView?.setOnPreparedListener { mp -> mp.setVolume(0f, 0f) }
+                    videoView?.start()
+
+                    // 🔊 ኖርማል የተረጎመውን ድምፅ በተከታታይ ማጫወት
                     playCombinedAmharicAudio(amharicTranslations)
                 }
             }
@@ -278,7 +278,6 @@ class MainActivity : Activity() {
                         prepare()
                         start()
                         
-                        // የአንዱ ዓረፍተ ነገር ድምፅ ሲያልቅ ቀጣዩ በኖርማል ሁኔታ እንዲቀጥል ማድረግ
                         setOnCompletionListener {
                             synchronized(syncLatch) {
                                 syncLatch.notify()
