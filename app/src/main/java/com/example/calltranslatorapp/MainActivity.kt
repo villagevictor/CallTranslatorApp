@@ -19,6 +19,8 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.VideoView
 import java.io.BufferedReader
+import java.io.File
+import java.io.FileOutputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
@@ -37,6 +39,10 @@ class MainActivity : Activity() {
     private var mediaPlayer: MediaPlayer? = null
     private var currentProgress = 0
     private var isProcessing = false
+    
+    // የኦፍላይን ድምፅ ፋይል ማከማቻ
+    private var localAudioFile: File? = null
+    private var savedVideoUri: Uri? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,7 +73,6 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(statusTextView)
 
-        // 📊 የፐርሰንት መቁጠሪያ ባር (Progress Bar)
         progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -98,7 +103,6 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(translationTextView)
 
-        // 📤 ቪዲዮ መጫኛ ቁልፍ
         val btnUploadVideo = Button(this).apply {
             text = "📁 ቪዲዮ ስቀል (Upload Video)"
             setTextColor(Color.WHITE)
@@ -112,15 +116,10 @@ class MainActivity : Activity() {
         }
 
         btnUploadVideo.setOnClickListener {
-            if (checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED) {
-                openVideoPicker()
-            } else {
-                requestPermissions(arrayOf("android.permission.RECORD_AUDIO"), 105)
-            }
+            openVideoPicker()
         }
         mainLayout.addView(btnUploadVideo)
 
-        // 💾 የተቀነባበረ ቪዲዮ ማውረጃ ቁልፍ (Normal Amharic Audio Playback)
         btnDownloadVideo = Button(this).apply {
             text = "💾 የተረጎመውን ቪዲዮ አውርድ (Download Amharic Video)"
             setTextColor(Color.WHITE)
@@ -150,6 +149,7 @@ class MainActivity : Activity() {
         if (requestCode == 110 && resultCode == RESULT_OK && data != null) {
             val videoUri: Uri? = data.data
             if (videoUri != null) {
+                savedVideoUri = videoUri
                 startOfflineTranslation(videoUri)
             }
         }
@@ -167,14 +167,12 @@ class MainActivity : Activity() {
         statusTextView?.text = "⚡ ቪዲዮው ተጭኗል፤ የእንግሊዝኛውን ንግግር በመተንተን ላይ ነው..."
         statusTextView?.setTextColor(Color.parseColor("#F59E0B"))
         
-        // ቪዲዮውን መጀመሪያ ማጫወት
         videoView?.setVideoURI(uri)
         videoView?.setOnPreparedListener { mp ->
-            mp.setVolume(1f, 1f) // መጀመሪያ እንግሊዝኛውን ያጫውታል
+            mp.setVolume(1f, 1f)
             videoView?.start()
         }
 
-        // 🔄 የትርጉም ወረፋ ማስጀመር
         thread {
             val sampleEnglishSentences = listOf(
                 "Jimmy good to see you we have a special surprise",
@@ -190,7 +188,6 @@ class MainActivity : Activity() {
                 val englishText = sampleEnglishSentences[i]
                 val stepPercent = ((i + 1) * 100) / totalSteps
                 
-                // የትርጉም ጥሪ
                 val translatedChunk = translateTextTextOnly(englishText)
                 amharicTranslations.add(translatedChunk)
 
@@ -204,6 +201,9 @@ class MainActivity : Activity() {
                 Thread.sleep(2500)
             }
 
+            // 💾 የአማርኛ ድምፅ ፋይሎችን በስልኩ ማህደረ ትውስታ ውስጥ በኦፍላይን መልክ ማዘጋጀት
+            downloadAndMergeAmharicAudioLocally(amharicTranslations)
+
             mainHandler.post {
                 isProcessing = false
                 statusTextView?.text = "🎉 ትርጉሙ 100% ተጠናቋል! ቪዲዮው ለአማርኛ ዝግጁ ነው..."
@@ -214,14 +214,14 @@ class MainActivity : Activity() {
                 btnDownloadVideo?.setOnClickListener {
                     statusTextView?.text = "🔊 ቪዲዮው ወርዷል፤ በአማርኛ ድምፅ (Offline) በመጫወት ላይ ነው..."
                     
-                    // 🔇 የእንግሊዝኛውን የቪዲዮ ድምፅ ማጥፋት
+                    // 🔇 የእንግሊዝኛውን ድምፅ ሙሉ በሙሉ መዝጋት
                     videoView?.pause()
                     videoView?.seekTo(0)
                     videoView?.setOnPreparedListener { mp -> mp.setVolume(0f, 0f) }
                     videoView?.start()
 
-                    // 🔊 ኖርማል የተረጎመውን ድምፅ በተከታታይ ማጫወት
-                    playCombinedAmharicAudio(amharicTranslations)
+                    // 🔊 የወረደውን የአማርኛ ድምፅ ከስልኩ ውስጥ (Offline) ማጫወት
+                    playLocalAmharicAudio()
                 }
             }
         }
@@ -257,41 +257,53 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun playCombinedAmharicAudio(sentences: List<String>) {
-        thread {
-            for (text in sentences) {
-                val syncLatch = Object()
-                try {
-                    mediaPlayer?.release()
-                    
-                    val ttsUrl = "https://translate.google.com/translate_tts?ie=UTF-8&tl=am&client=tw-ob&q=" +
-                            URLEncoder.encode(text, "UTF-8")
+    // 📥 የአማርኛውን ድምፅ ወደ ስልኩ አካባቢ ማውረጃ ኢንጂን
+    private fun downloadAndMergeAmharicAudioLocally(sentences: List<String>) {
+        try {
+            localAudioFile = File(cacheDir, "amharic_dubbed.mp3")
+            val fos = FileOutputStream(localAudioFile)
 
-                    mediaPlayer = MediaPlayer().apply {
-                        setAudioAttributes(
-                            AudioAttributes.Builder()
-                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                .setUsage(AudioAttributes.USAGE_MEDIA)
-                                .build()
-                        )
-                        setDataSource(ttsUrl)
-                        prepare()
-                        start()
-                        
-                        setOnCompletionListener {
-                            synchronized(syncLatch) {
-                                syncLatch.notify()
-                            }
-                        }
+            for (text in sentences) {
+                val ttsUrl = "https://translate.google.com/translate_tts?ie=UTF-8&tl=am&client=tw-ob&q=" +
+                        URLEncoder.encode(text, "UTF-8")
+                val url = URL(ttsUrl)
+                val con = url.openConnection() as HttpURLConnection
+                con.requestMethod = "GET"
+                con.setRequestProperty("User-Agent", "Mozilla/5.0")
+
+                if (con.responseCode == 200) {
+                    val inputStream = con.inputStream
+                    val buffer = ByteArray(4096)
+                    var bytesRead: Int
+                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        fos.write(buffer, 0, bytesRead)
                     }
-                    
-                    synchronized(syncLatch) {
-                        syncLatch.wait()
-                    }
-                } catch (e: Exception) {
-                    break
+                    inputStream.close()
                 }
             }
+            fos.close()
+        } catch (e: Exception) {}
+    }
+
+    // 🔊 የወረደውን ሙሉ የአማርኛ ድምፅ ያለምንም ኢንተርኔት (Offline) ማጫወቻ
+    private fun playLocalAmharicAudio() {
+        if (localAudioFile == null || !localAudioFile!!.exists()) return
+
+        thread {
+            try {
+                mediaPlayer?.release()
+                mediaPlayer = MediaPlayer().apply {
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .build()
+                    )
+                    setDataSource(localAudioFile!!.absolutePath)
+                    prepare()
+                    start()
+                }
+            } catch (e: Exception) {}
         }
     }
 
