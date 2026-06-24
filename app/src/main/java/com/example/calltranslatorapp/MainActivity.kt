@@ -26,7 +26,6 @@ import android.widget.TextView
 import android.widget.VideoView
 import java.io.BufferedReader
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -79,14 +78,17 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(statusTextView)
 
+        // 📊 የፐርሰንት መቁጠሪያ ባር (ስማርት ካስት ስህተት የተስተካከለበት)
         progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 30)
-            layoutParams.setMargins(0, 0, 0, 30)
+            val progressLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 30)
+            progressLp.setMargins(0, 0, 0, 30)
+            layoutParams = progressLp
             visibility = View.GONE
             max = 100
         }
         mainLayout.addView(progressBar)
 
+        // 📝 የትርጉም ማሳያ ሰሌዳ (ስማርት ካስት ስህተት የተስተካከለበት)
         translationTextView = TextView(this).apply {
             text = "⏳ ቪዲዮው ሲጫን አፑ የእንግሊዝኛውን ንግግር ፈልፍሎ በ % እየቆጠረ በትክክል ይተረጉመዋል..."
             textSize = 16f
@@ -94,14 +96,14 @@ class MainActivity : Activity() {
             setTextColor(Color.parseColor("#10B981"))
             gravity = Gravity.CENTER
             setPadding(40, 40, 40, 40)
-            val descDrawable = GradientDrawable().apply {
+            background = GradientDrawable().apply {
                 setColor(Color.parseColor("#1E293B"))
                 cornerRadius = 25f
                 setStroke(4, Color.parseColor("#3B82F6"))
             }
-            background = descDrawable
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            layoutParams.setMargins(0, 0, 0, 40)
+            val textLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            textLp.setMargins(0, 0, 0, 40)
+            layoutParams = textLp
         }
         mainLayout.addView(translationTextView)
 
@@ -149,7 +151,6 @@ class MainActivity : Activity() {
         }
     }
 
-    // 🎙️ እውነተኛ የቪዲዮ ድምፅ መፍለቂያ እና በፐርሰንት መቁጠሪያ ኢንጂን
     private fun startRealVideoTranslation(uri: Uri) {
         if (isProcessing) return
         isProcessing = true
@@ -165,10 +166,8 @@ class MainActivity : Activity() {
 
         videoView?.setVideoURI(uri)
         videoView?.setOnPreparedListener { mp ->
-            mp.setVolume(0.01f, 0.01f) // በጸጥታ ይጀምራል
+            mp.setVolume(0.01f, 0.01f)
             videoView?.start()
-            
-            // ንግግሩን ከቪዲዮው ላይ መቅዳት መጀመር
             startLiveSpeechExtraction()
         }
     }
@@ -196,7 +195,6 @@ class MainActivity : Activity() {
                             val realEnglish = matches[0]
                             extractedSentences.add(realEnglish)
                             
-                            // በቅጽበት ወደ አማርኛ መተርጎም
                             thread {
                                 val amharic = translateOnline(realEnglish)
                                 amharicTranslations.add(amharic)
@@ -221,10 +219,8 @@ class MainActivity : Activity() {
 
     private fun processNextChunkOrFinish() {
         if (videoView != null && videoView!!.isPlaying) {
-            // ቪዲዮው ገና ካልጨረሰ ማዳመጡን ይቀጥላል
             startLiveSpeechExtraction()
         } else {
-            // ቪዲዮው ሲያልቅ (100% ሲሞላ) ማውረጃውን ማዘጋጀት
             progressBar?.progress = 100
             thread {
                 downloadAmharicAudioTracks(amharicTranslations)
@@ -233,10 +229,7 @@ class MainActivity : Activity() {
                     statusTextView?.text = "🎉 ትርጉሙ 100% ተጠናቋል! ወደ ስልክህ ማውረድ ትችላለህ..."
                     statusTextView?.setTextColor(Color.parseColor("#10B981"))
                     btnDownloadVideo?.visibility = View.VISIBLE
-                    
-                    btnDownloadVideo?.setOnClickListener {
-                        saveVideoToGallery()
-                    }
+                    btnDownloadVideo?.setOnClickListener { saveVideoToGallery() }
                 }
             }
         }
@@ -273,7 +266,6 @@ class MainActivity : Activity() {
         } catch (e: Exception) {}
     }
 
-    // 💾 ሙሉ ቪዲዮውን ከአማርኛ ድምፅ ጋር አዋህዶ ወደ ስልክ ማህደረትውስታ (Gallery) ማውረጃ ኮድ
     private fun saveVideoToGallery() {
         if (selectedVideoUri == null) return
         statusTextView?.text = "💾 ቪዲዮው ወደ ስልክህ 'Movies' ፎልደር ውስጥ እየወረደ ነው..."
@@ -294,7 +286,6 @@ class MainActivity : Activity() {
                     val pfd = contentResolver.openFileDescriptor(finalVideoUri, "w")
                     val fos = FileOutputStream(pfd!!.fileDescriptor)
                     
-                    // ኦሪጅናል ቪዲዮውን ወደ ስልኩ ፋይል መቅዳት
                     val inputStream = contentResolver.openInputStream(selectedVideoUri!!)
                     inputStream?.copyTo(fos)
                     inputStream?.close()
@@ -305,10 +296,9 @@ class MainActivity : Activity() {
                         statusTextView?.text = "🎉 ቪዲዮው በተሳካ ሁኔታ ወደ ስልክህ ወርዷል (Saved to Gallery)!"
                         statusTextView?.setTextColor(Color.parseColor("#10B981"))
                         
-                        // የወረደውን ቪዲዮ በአማርኛ ኦፍላይን ማጫወት
                         videoView?.setVideoURI(finalVideoUri)
                         videoView?.setOnPreparedListener { mp ->
-                            mp.setVolume(0f, 0f) // እንግሊዝኛውን መዝጋት
+                            mp.setVolume(0f, 0f)
                             videoView?.start()
                             playOfflineAmharicAudio()
                         }
