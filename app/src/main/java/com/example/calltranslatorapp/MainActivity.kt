@@ -1,13 +1,18 @@
 package com.example.calltranslatorapp
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -31,21 +36,19 @@ class MainActivity : Activity() {
     private var progressBar: ProgressBar? = null
     
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var speechRecognizer: SpeechRecognizer? = null
     private var isProcessing = false
+    private var speechIntent: Intent? = null
     
-    // የቪዲዮው ንግግር በሰከንድ የተከፋፈለበት ዝርዝር (ለሙከራና ለፈጣን ትርጉም የተዘጋጀ)
-    private val EnglishTimestamps = arrayOf(
-        "Hello my name is Riley",
-        "I recently moved to a new country where English is the main language",
-        "At first I was nervous because my English wasn't very good",
-        "I knew that before I could focus on my studies I had to improve my language skills",
-        "I decided to take an English course to help me get better",
-        "In the beginning it was hard and I made many mistakes",
-        "But every day I practiced more speaking with people and reading books in English"
-    )
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // የስልኩን ሚዲያ ድምፅ በራስ-ሰር ወደ ከፍተኛ ደረጃ ከፍ ማድረግ (ማይክሮፎኑ በደንብ እንዲሰማው)
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxVolume, 0)
+        } catch (e: Exception) {}
 
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -62,7 +65,7 @@ class MainActivity : Activity() {
         mainLayout.addView(videoView)
 
         statusTextView = TextView(this).apply {
-            text = "📁 እባክዎ የእንግሊዝኛ ቪዲዮ መርጠው Upload ያድርጉ..."
+            text = "📁 እባክዎ ማንኛውንም የእንግሊዝኛ ቪዲዮ መርጠው Upload ያድርጉ..."
             textSize = 15f
             setTextColor(Color.parseColor("#94A3B8"))
             gravity = Gravity.CENTER
@@ -80,16 +83,16 @@ class MainActivity : Activity() {
         mainLayout.addView(progressBar)
 
         translationTextView = TextView(this).apply {
-            text = "[ እዚህ ላይ እውነተኛ የአማርኛ Subtitle ይወጣል ]"
+            text = "[ እዚህ ላይ የቪዲዮው እውነተኛ የአማርኛ Subtitle በቅጽበት ይወጣል ]"
             textSize = 18f
             setTypeface(null, android.graphics.Typeface.BOLD)
-            setTextColor(Color.parseColor("#F59E0B")) // ደማቅ ቢጫ ለሰብታይትል
+            setTextColor(Color.parseColor("#F59E0B"))
             gravity = Gravity.CENTER
             setPadding(40, 40, 40, 40)
             background = GradientDrawable().apply {
                 setColor(Color.parseColor("#1E293B"))
                 cornerRadius = 20f
-                setStroke(5, Color.parseColor("#10B981")) // የአረንጓዴ ቦርደር መስመር
+                setStroke(5, Color.parseColor("#10B981"))
             }
             val textLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             textLp.setMargins(0, 0, 0, 40)
@@ -98,7 +101,7 @@ class MainActivity : Activity() {
         mainLayout.addView(translationTextView)
 
         val btnUploadVideo = Button(this).apply {
-            text = "📁 ቪዲዮ ስቀል (Upload Video with Subtitles)"
+            text = "📁 ማንኛውንም ቪዲዮ ስቀል (Upload ANY Video)"
             setTextColor(Color.WHITE)
             textSize = 16f
             setPadding(50, 40, 50, 40)
@@ -111,6 +114,13 @@ class MainActivity : Activity() {
         mainLayout.addView(btnUploadVideo)
 
         setContentView(mainLayout)
+
+        // የድምፅ መፈለጊያ ኢንቴንትን ማዘጋጀት
+        speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+        }
     }
 
     private fun openVideoPicker() {
@@ -122,61 +132,107 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 110 && resultCode == RESULT_OK && data != null) {
             data.data?.let { uri ->
-                startVideoWithPerfectSubtitles(uri)
+                startUniversalSubtitleEngine(uri)
             }
         }
     }
 
-    // 🚀 የቪዲዮውን ድምፅ በቀጥታ ተከታትሎ ትክክለኛ የአማርኛ ሰብታይትል የሚያወጣ ኢንጂን
-    private fun startVideoWithPerfectSubtitles(uri: Uri) {
+    private fun startUniversalSubtitleEngine(uri: Uri) {
         isProcessing = true
         progressBar?.visibility = View.VISIBLE
         progressBar?.progress = 0
         
-        statusTextView?.text = "🔊 ቪዲዮው በእንግሊዝኛ እየተጫወተ ነው፤ የአማርኛ Subtitle በማውጣት ላይ..."
+        statusTextView?.text = "📢 የቪዲዮውን ድምፅ በቀጥታ እየሰማሁ ወደ አማርኛ Subtitle እየቀየርኩ ነው..."
         statusTextView?.setTextColor(Color.parseColor("#10B981"))
 
         videoView?.setVideoURI(uri)
         videoView?.setOnPreparedListener { mp ->
             videoView?.start()
-            runSubtitleSyncLoop()
+            startContinuousListeningLoop()
+            runProgressBarUpdateLoop()
         }
     }
 
-    // ⏱️ ቪዲዮው ከተናገረው ሰከንድ ጋር ሰብታይትሉን በትክክል ማገጣጠሚያ ሉፕ
-    private fun runSubtitleSyncLoop() {
-        if (videoView == null || !videoView!!.isPlaying) {
-            isProcessing = false
-            progressBar?.progress = 100
-            statusTextView?.text = "🎉 ቪዲዮው በተሳካ ሁኔታ ተተርጉሞ ተጠናቋል!"
-            return
-        }
+    // 🎙️ የትኛውንም የቪዲዮ ድምፅ በቀጥታ የሚሰማ እና ያለማቋረጥ የሚሰራል ሉፕ
+    private fun startContinuousListeningLoop() {
+        if (videoView == null || !videoView!!.isPlaying) return
 
-        val currentPos = videoView!!.currentPosition
-        val duration = videoView!!.duration
-        if (duration > 0) {
-            progressBar?.progress = (currentPos * 100) / duration
-        }
+        mainHandler.post {
+            try {
+                speechRecognizer?.destroy()
+                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+                speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+                    override fun onReadyForSpeech(params: Bundle?) {}
+                    override fun onBeginningOfSpeech() {}
+                    override fun onRmsChanged(rmsdB: Float) {}
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+                    override fun onEndOfSpeech() {}
+                    
+                    override fun onError(error: Int) {
+                        // ስህተት ቢፈጠርም እንኳ ሳይቆም የትኛውንም ቪዲዮ ማዳመጡን ይቀጥላል
+                        mainHandler.postDelayed({ startContinuousListeningLoop() }, 400)
+                    }
 
-        // ቪዲዮው የደረሰበትን ሰከንድ መሰረት በማድረግ ተገቢውን የእንግሊዝኛ አረፍተ ነገር መምረጥ
-        val index = (currentPos / 4000) % EnglishTimestamps.size
-        val currentEnglishSpeech = EnglishTimestamps[index]
+                    override fun onResults(results: Bundle?) {
+                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        if (!matches.isNullOrEmpty()) {
+                            val liveEnglishSpeech = matches[0]
+                            
+                            thread {
+                                // የተሰማውን ማንኛውንም አዲስ ንግግር ወዲያውኑ መተርጎም
+                                val dynamicSubtitle = translateOnlineDynamic(liveEnglishSpeech)
+                                mainHandler.post {
+                                    if (videoView != null && videoView!!.isPlaying) {
+                                        translationTextView?.text = "📝 [የአማርኛ Subtitle]:\n$dynamicSubtitle"
+                                    }
+                                }
+                            }
+                        }
+                        startContinuousListeningLoop()
+                    }
 
-        thread {
-            // የቪዲዮውን ንግግር ኦንላይን ወደ አማርኛ መተርጎም
-            val amharicSubtitleText = translateTextToAmharic(currentEnglishSpeech)
-            
-            mainHandler.post {
-                // 📝 በአረንጓዴው ሳጥን ውስጥ ሰብታይትሉን በቅጽበት ማሳየት
-                translationTextView?.text = amharicSubtitleText
+                    override fun onPartialResults(partialResults: Bundle?) {
+                        // ለበለጠ ፍጥነት በከፊል የተሰሙትንም ጭምር በቅጽበት ያሳያል
+                        val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        if (!matches.isNullOrEmpty()) {
+                            val partialEnglish = matches[0]
+                            thread {
+                                val dynamicSubtitle = translateOnlineDynamic(partialEnglish)
+                                mainHandler.post {
+                                    if (videoView != null && videoView!!.isPlaying) {
+                                        translationTextView?.text = "📝 [የአማርኛ Subtitle...]:\n$dynamicSubtitle"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    override fun onEvent(eventType: Int, params: Bundle?) {}
+                })
+                speechRecognizer?.startListening(speechIntent)
+            } catch (e: Exception) {
+                mainHandler.postDelayed({ startContinuousListeningLoop() }, 400)
             }
         }
-
-        // በየ 1 ሰከንድ (1000ms) የቪዲዮውን ሰከንድ እየፈተሸ ሰብታይትሉን ያድሳል
-        mainHandler.postDelayed({ runSubtitleSyncLoop() }, 1200)
     }
 
-    private fun translateTextToAmharic(text: String): String {
+    private fun runProgressBarUpdateLoop() {
+        if (videoView != null && videoView!!.isPlaying) {
+            val currentPos = videoView!!.currentPosition
+            val duration = videoView!!.duration
+            if (duration > 0) {
+                progressBar?.progress = (currentPos * 100) / duration
+            }
+            mainHandler.postDelayed({ runProgressBarUpdateLoop() }, 1000)
+        } else if (videoView != null && !videoView!!.isPlaying && isProcessing) {
+            isProcessing = false
+            progressBar?.progress = 100
+            statusTextView?.text = "🎉 ቪዲዮው ተጠናቋል!"
+            statusTextView?.setTextColor(Color.parseColor("#94A3B8"))
+        }
+    }
+
+    private fun translateOnlineDynamic(text: String): String {
+        if (text.trim().isEmpty()) return "..."
         return try {
             val url = URL("https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=am&dt=t&q=" + URLEncoder.encode(text, "UTF-8"))
             val con = url.openConnection() as HttpURLConnection
@@ -187,7 +243,12 @@ class MainActivity : Activity() {
                 val start = res.indexOf("\"") + 1
                 val end = res.indexOf("\"", start)
                 res.substring(start, end)
-            } else "ተርጓሚው ሊገናኝ አልቻለም..."
+            } else "..."
         } catch (e: Exception) { "..." }
+    }
+
+    override fun onDestroy() {
+        speechRecognizer?.destroy()
+        super.onDestroy()
     }
 }
