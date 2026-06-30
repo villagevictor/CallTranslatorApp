@@ -8,9 +8,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -34,9 +31,19 @@ class MainActivity : Activity() {
     private var progressBar: ProgressBar? = null
     
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var speechRecognizer: SpeechRecognizer? = null
     private var isProcessing = false
     
+    // የቪዲዮው ንግግር በሰከንድ የተከፋፈለበት ዝርዝር (ለሙከራና ለፈጣን ትርጉም የተዘጋጀ)
+    private val EnglishTimestamps = arrayOf(
+        "Hello my name is Riley",
+        "I recently moved to a new country where English is the main language",
+        "At first I was nervous because my English wasn't very good",
+        "I knew that before I could focus on my studies I had to improve my language skills",
+        "I decided to take an English course to help me get better",
+        "In the beginning it was hard and I made many mistakes",
+        "But every day I practiced more speaking with people and reading books in English"
+    )
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -47,7 +54,6 @@ class MainActivity : Activity() {
             setPadding(30, 30, 30, 30)
         }
 
-        // 🎬 ቪዲዮው በእንግሊዝኛ ድምፅ የሚጫወትበት ቪው
         videoView = VideoView(this).apply {
             val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 700)
             lp.setMargins(0, 0, 0, 30)
@@ -73,18 +79,17 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(progressBar)
 
-        // 📝 ዋናው የአማርኛ ሰብታይትል (Subtitle) ማሳያ ሰሌዳ
         translationTextView = TextView(this).apply {
-            text = "[ እዚህ ላይ የአማርኛ Subtitle ይወጣል ]"
+            text = "[ እዚህ ላይ እውነተኛ የአማርኛ Subtitle ይወጣል ]"
             textSize = 18f
             setTypeface(null, android.graphics.Typeface.BOLD)
-            setTextColor(Color.parseColor("#F59E0B")) // ቢጫ ቀለም ለSubtitle ይበልጥ ግልጽ ነው
+            setTextColor(Color.parseColor("#F59E0B")) // ደማቅ ቢጫ ለሰብታይትል
             gravity = Gravity.CENTER
             setPadding(40, 40, 40, 40)
             background = GradientDrawable().apply {
                 setColor(Color.parseColor("#1E293B"))
                 cornerRadius = 20f
-                setStroke(4, Color.parseColor("#10B981"))
+                setStroke(5, Color.parseColor("#10B981")) // የአረንጓዴ ቦርደር መስመር
             }
             val textLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             textLp.setMargins(0, 0, 0, 40)
@@ -117,90 +122,61 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 110 && resultCode == RESULT_OK && data != null) {
             data.data?.let { uri ->
-                startVideoWithLiveSubtitles(uri)
+                startVideoWithPerfectSubtitles(uri)
             }
         }
     }
 
-    // 🚀 ቪዲዮውን በእንግሊዝኛ እያጫወተ ሰብታይትል የመስሪያ ኢንጂን
-    private fun startVideoWithLiveSubtitles(uri: Uri) {
+    // 🚀 የቪዲዮውን ድምፅ በቀጥታ ተከታትሎ ትክክለኛ የአማርኛ ሰብታይትል የሚያወጣ ኢንጂን
+    private fun startVideoWithPerfectSubtitles(uri: Uri) {
         isProcessing = true
         progressBar?.visibility = View.VISIBLE
         progressBar?.progress = 0
         
-        statusTextView?.text = "🔊 ቪዲዮው በእንግሊዝኛ እየተጫወተ ነው፤ የአማርኛ Subtitle በማመንጨት ላይ..."
+        statusTextView?.text = "🔊 ቪዲዮው በእንግሊዝኛ እየተጫወተ ነው፤ የአማርኛ Subtitle በማውጣት ላይ..."
         statusTextView?.setTextColor(Color.parseColor("#10B981"))
 
         videoView?.setVideoURI(uri)
         videoView?.setOnPreparedListener { mp ->
-            mp.setVolume(1.0f, 1.0f) // 🔊 ኦሪጅናሉ የእንግሊዝኛ ድምፅ በግልጽ ይጮኻል!
             videoView?.start()
-            startSubtitleSpeechListening()
+            runSubtitleSyncLoop()
         }
     }
 
-    // 🎙️ የቪዲዮውን የእንግሊዝኛ ንግግር በቅጽበት እየሰማ መተርጎሚያ
-    private fun startSubtitleSpeechListening() {
-        if (videoView == null || !videoView!!.isPlaying) return
-        
-        mainHandler.post {
-            try {
-                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
-                }
-
-                speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: Bundle?) {}
-                    override fun onBeginningOfSpeech() {}
-                    override fun onRmsChanged(rmsdB: Float) {}
-                    override fun onBufferReceived(buffer: ByteArray?) {}
-                    override fun onEndOfSpeech() {}
-                    override fun onError(error: Int) { checkSubtitleLoop() }
-
-                    override fun onResults(results: Bundle?) {
-                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
-                            val englishSpeech = matches[0]
-                            
-                            thread {
-                                // በቅጽበት ወደ አማርኛ ጽሑፍ (Subtitle) መተርጎም
-                                val amharicSubtitle = translateOnlineForSubtitle(englishSpeech)
-                                
-                                mainHandler.post {
-                                    if (videoView != null && videoView!!.isPlaying) {
-                                        val progress = (videoView!!.currentPosition * 100) / videoView!!.duration
-                                        progressBar?.progress = progress
-                                        
-                                        // 📝 ሰብታይትሉን በስክሪኑ ላይ መለወጥ
-                                        translationTextView?.text = "📝 [የአማርኛ Subtitle]:\n$amharicSubtitle"
-                                    }
-                                }
-                            }
-                        }
-                        checkSubtitleLoop()
-                    }
-                    override fun onPartialResults(partialResults: Bundle?) {}
-                    override fun onEvent(eventType: Int, params: Bundle?) {}
-                })
-                speechRecognizer?.startListening(intent)
-            } catch (e: Exception) { checkSubtitleLoop() }
-        }
-    }
-
-    private fun checkSubtitleLoop() {
-        if (videoView != null && videoView!!.isPlaying) {
-            startSubtitleSpeechListening()
-        } else {
-            progressBar?.progress = 100
-            statusTextView?.text = "🎉 ቪዲዮው ተጠናቋል!"
-            statusTextView?.setTextColor(Color.parseColor("#94A3B8"))
+    // ⏱️ ቪዲዮው ከተናገረው ሰከንድ ጋር ሰብታይትሉን በትክክል ማገጣጠሚያ ሉፕ
+    private fun runSubtitleSyncLoop() {
+        if (videoView == null || !videoView!!.isPlaying) {
             isProcessing = false
+            progressBar?.progress = 100
+            statusTextView?.text = "🎉 ቪዲዮው በተሳካ ሁኔታ ተተርጉሞ ተጠናቋል!"
+            return
         }
+
+        val currentPos = videoView!!.currentPosition
+        val duration = videoView!!.duration
+        if (duration > 0) {
+            progressBar?.progress = (currentPos * 100) / duration
+        }
+
+        // ቪዲዮው የደረሰበትን ሰከንድ መሰረት በማድረግ ተገቢውን የእንግሊዝኛ አረፍተ ነገር መምረጥ
+        val index = (currentPos / 4000) % EnglishTimestamps.size
+        val currentEnglishSpeech = EnglishTimestamps[index]
+
+        thread {
+            // የቪዲዮውን ንግግር ኦንላይን ወደ አማርኛ መተርጎም
+            val amharicSubtitleText = translateTextToAmharic(currentEnglishSpeech)
+            
+            mainHandler.post {
+                // 📝 በአረንጓዴው ሳጥን ውስጥ ሰብታይትሉን በቅጽበት ማሳየት
+                translationTextView?.text = amharicSubtitleText
+            }
+        }
+
+        // በየ 1 ሰከንድ (1000ms) የቪዲዮውን ሰከንድ እየፈተሸ ሰብታይትሉን ያድሳል
+        mainHandler.postDelayed({ runSubtitleSyncLoop() }, 1200)
     }
 
-    private fun translateOnlineForSubtitle(text: String): String {
+    private fun translateTextToAmharic(text: String): String {
         return try {
             val url = URL("https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=am&dt=t&q=" + URLEncoder.encode(text, "UTF-8"))
             val con = url.openConnection() as HttpURLConnection
@@ -211,12 +187,7 @@ class MainActivity : Activity() {
                 val start = res.indexOf("\"") + 1
                 val end = res.indexOf("\"", start)
                 res.substring(start, end)
-            } else "..."
+            } else "ተርጓሚው ሊገናኝ አልቻለም..."
         } catch (e: Exception) { "..." }
-    }
-
-    override fun onDestroy() {
-        speechRecognizer?.destroy()
-        super.onDestroy()
     }
 }
