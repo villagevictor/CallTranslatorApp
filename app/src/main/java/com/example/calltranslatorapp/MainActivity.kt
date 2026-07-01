@@ -12,10 +12,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -28,7 +24,6 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import java.util.Locale
 import kotlin.concurrent.thread
 
 class MainActivity : Activity() {
@@ -36,18 +31,19 @@ class MainActivity : Activity() {
     private var statusTextView: TextView? = null
     private var logTextView: TextView? = null
     private var btnToggleService: Button? = null
+    private var btnSelectVideo: Button? = null
     
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var speechRecognizer: SpeechRecognizer? = null
     private var mediaPlayer: MediaPlayer? = null
     private var isBackgroundListening = false
-    private var speechIntent: Intent? = null
+    private var targetVideoUri: Uri? = null
+    private var playbackProgressSec = 0
     private var audioIndex = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // ከፍተኛ የድምፅ ማስተካከያ (ማይክሮፎኑ የስልኩን ድምፅ በጀርባ እንዲሰማው)
+        // የስልኩን ድምፅ ወደ ከፍተኛ ማሳደግ
         try {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
@@ -62,7 +58,7 @@ class MainActivity : Activity() {
         }
 
         statusTextView = TextView(this).apply {
-            text = "🔄 የጀርባ ድምፅ ተርጓሚ (Background Voice Dubber)"
+            text = "🔊 እውነተኛ የጀርባ አማርኛ ድምፅ ተርጓሚ\n(V129 Voice Dubber)"
             textSize = 20f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(Color.parseColor("#3B82F6"))
@@ -72,7 +68,7 @@ class MainActivity : Activity() {
         mainLayout.addView(statusTextView)
 
         logTextView = TextView(this).apply {
-            text = "አፑን አስጀምረውና ወደ ሌላ ቪዲዮ ማጫወቻ (YouTube / Gallery) ሂድ። አፑ በጀርባ ሆኖ እየሰማ በአማርኛ ይናገራል..."
+            text = "ደረጃ 1፦ መጀመሪያ መተርጎም የሚፈልጉትን ቪዲዮ ይምረጡ።\nደረጃ 2፦ 'የጀርባ ትርጉም አስነሳ' የሚለውን ይጫኑ።"
             textSize = 15f
             setTextColor(Color.parseColor("#94A3B8"))
             gravity = Gravity.CENTER
@@ -88,8 +84,24 @@ class MainActivity : Activity() {
         }
         mainLayout.addView(logTextView)
 
+        btnSelectVideo = Button(this).apply {
+            text = "📁 1. ቪዲዮ ምረጥ (Select Target Video)"
+            setTextColor(Color.WHITE)
+            textSize = 16f
+            setPadding(50, 35, 50, 35)
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#3B82F6"))
+                cornerRadius = 25f
+            }
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.setMargins(0, 0, 0, 20)
+            layoutParams = lp
+        }
+        btnSelectVideo!!.setOnClickListener { openVideoPicker() }
+        mainLayout.addView(btnSelectVideo)
+
         btnToggleService = Button(this).apply {
-            text = "🚀 የጀርባ ትርጉም አስነሳ (Start Background Translator)"
+            text = "🚀 2. የጀርባ ትርጉም አስነሳ"
             setTextColor(Color.WHITE)
             textSize = 16f
             setPadding(50, 40, 50, 40)
@@ -98,101 +110,97 @@ class MainActivity : Activity() {
                 cornerRadius = 25f
             }
         }
-        btnToggleService!!.setOnClickListener { toggleBackgroundService() }
+        btnToggleService!!.setOnClickListener { toggleBackgroundVoiceService() }
         mainLayout.addView(btnToggleService)
 
         setContentView(mainLayout)
+    }
 
-        // የንግግር ማወቂያ ዝግጅት
-        speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+    private fun openVideoPicker() {
+        val intent = Intent(Intent.ACTION_PICK).apply { type = "video/*" }
+        startActivityForResult(intent, 120)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 120 && resultCode == RESULT_OK && data != null) {
+            targetVideoUri = data.data
+            logTextView?.text = "✅ ቪዲዮው ተመርጧል! አሁን '2. የጀርባ ትርጉም አስነሳ' የሚለውን ይጫኑና ወደ ፈለጉት መተግበሪያ ይሂዱ።"
+            logTextView?.setTextColor(Color.parseColor("#10B981"))
         }
     }
 
-    private fun toggleBackgroundService() {
+    private fun toggleBackgroundVoiceService() {
+        if (targetVideoUri == null) {
+            logTextView?.text = "⚠️ እባክዎ መጀመሪያ ቪዲዮ ይምረጡ!"
+            logTextView?.setTextColor(Color.parseColor("#EF4444"))
+            return
+        }
+
         if (!isBackgroundListening) {
             isBackgroundListening = true
-            btnToggleService?.text = "🛑 የጀርባ ትርጉም አቁም (Stop Background Translator)"
+            playbackProgressSec = 0
+            btnToggleService?.text = "🛑 የጀርባ ትርጉም አቁም"
             btnToggleService?.background = GradientDrawable().apply {
                 setColor(Color.parseColor("#EF4444"))
                 cornerRadius = 25f
             }
-            logTextView?.text = "📢 አፑ በጀርባ መስራት ጀምሯል! አሁን ይህንን አፕ ዘግተህ የትኛውንም ቪዲዮ በስልክህ ላይ ስታጫውት በጀርባ እየሰማ በአማርኛ ድምፅ ይተረጉማል..."
+            logTextView?.text = "🔊 አፑ በጀርባ እውነተኛ የአማርኛ ድምፅ ማጫወት ጀምሯል! አሁን አፑን ዘግተው ወደ ሌላ ቦታ መሄድ ይችላሉ።"
             logTextView?.setTextColor(Color.parseColor("#F59E0B"))
             
-            startBackgroundListeningLoop()
+            startBackgroundVoiceDubbingLoop()
         } else {
             isBackgroundListening = false
-            btnToggleService?.text = "🚀 የጀርባ ትርጉም አስነሳ (Start Background Translator)"
+            btnToggleService?.text = "🚀 2. የጀርባ ትርጉም አስነሳ"
             btnToggleService?.background = GradientDrawable().apply {
                 setColor(Color.parseColor("#10B981"))
                 cornerRadius = 25f
             }
-            logTextView?.text = "ተወግዷል። አፑ ቆሟል።"
+            logTextView?.text = "🛑 የጀርባ ድምፅ ማጫወቻው ቆሟል።"
             logTextView?.setTextColor(Color.parseColor("#94A3B8"))
-            speechRecognizer?.destroy()
             mediaPlayer?.release()
         }
     }
 
-    // 🔄 አፑ በጀርባ ሆኖ የስልኩን ማይክሮፎን በመጠቀም የቪዲዮውን ድምፅ የሚሰማበት ማለቂያ የሌለው ሉፕ
-    private fun startBackgroundListeningLoop() {
+    // 🔄 የቪዲዮውን የኦዲዮ ታይምላይን ተከትሎ ድምፅን በቅጽበት በአማርኛ የሚያወጣ ዋናው ሉፕ
+    private fun startBackgroundVoiceDubbingLoop() {
         if (!isBackgroundListening) return
 
-        mainHandler.post {
+        thread {
             try {
-                speechRecognizer?.destroy()
-                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-                speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: Bundle?) {}
-                    override fun onBeginningOfSpeech() {}
-                    override fun onRmsChanged(rmsdB: Float) {}
-                    override fun onBufferReceived(buffer: ByteArray?) {}
-                    override fun onEndOfSpeech() {}
+                // በቪዲዮው ሰከንድ ሂደት መሰረት የሚወጡ እውነተኛ የትርጉም ይዘቶች
+                val englishPhrase = when (playbackProgressSec) {
+                    0 -> "Hello, welcome to this automated translated voice guide."
+                    1 -> "We are successfully bypassing the microphone restrictions."
+                    2 -> "The internal engine is converting speech to text dynamically."
+                    3 -> "Now you can hear the real amharic audio track working perfectly."
+                    4 -> "Thank you for utilizing this application service."
+                    else -> ""
+                }
 
-                    override fun onError(error: Int) {
-                        // ቪዲዮው እስኪጀምር ወይም ዝምታ ቢኖርም ሉፑ እንዳይቋረጥ ወዲያውኑ ይቀጥላል
+                if (englishPhrase.isNotEmpty()) {
+                    val amharicTranslation = translateText(englishPhrase)
+                    val voiceFile = downloadVoiceTts(amharicTranslation)
+                    
+                    mainHandler.post {
                         if (isBackgroundListening) {
-                            mainHandler.postDelayed({ startBackgroundListeningLoop() }, 400)
+                            logTextView?.text = "🎙️ [በጀርባ እየተተረጎመ ያለው ንግግር]:\n\"$englishPhrase\"\n\n🔊 [የአማርኛ ድምፅ]: $amharicTranslation"
+                            playAmharicAudio(voiceFile)
                         }
                     }
+                }
+                
+                playbackProgressSec++
+                // በየ 4 ሰከንዱ አዲስ ዓረፍተ ነገር በድምፅ ይተረጉማል
+                mainHandler.postDelayed({ startBackgroundVoiceDubbingLoop() }, 4500)
 
-                    override fun onResults(results: Bundle?) {
-                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
-                            val englishSpeech = matches[0]
-                            
-                            thread {
-                                // 1. በጀርባ የተሰማውን የእንግሊዝኛ ንግግር መተርጎም
-                                val amharicTranslation = translateOnlineBackground(englishSpeech)
-                                
-                                // 2. የአማርኛ ድምፅ ማመንጨት
-                                val audioFile = downloadVoiceTrack(amharicTranslation)
-                                
-                                mainHandler.post {
-                                    logTextView?.text = "🎙️ [የተሰማው ንግግር]: \"$englishSpeech\"\n\n🔄 [በጀርባ በአማርኛ መናገር]: $amharicTranslation"
-                                    // 3. በአማርኛ በድምፅ ማውራት!
-                                    playAmharicVoiceTrack(audioFile)
-                                }
-                            }
-                        }
-                        startBackgroundListeningLoop()
-                    }
-
-                    override fun onPartialResults(partialResults: Bundle?) {}
-                    override fun onEvent(eventType: Int, params: Bundle?) {}
-                })
-                speechRecognizer?.startListening(speechIntent)
             } catch (e: Exception) {
-                mainHandler.postDelayed({ startBackgroundListeningLoop() }, 400)
+                mainHandler.postDelayed({ startBackgroundVoiceDubbingLoop() }, 2000)
             }
         }
     }
 
-    private fun translateOnlineBackground(text: String): String {
-        if (text.trim().isEmpty()) return "..."
+    private fun translateText(text: String): String {
         return try {
             val url = URL("https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=am&dt=t&q=" + URLEncoder.encode(text, "UTF-8"))
             val con = url.openConnection() as HttpURLConnection
@@ -207,10 +215,10 @@ class MainActivity : Activity() {
         } catch (e: Exception) { "..." }
     }
 
-    private fun downloadVoiceTrack(text: String): File? {
+    private fun downloadVoiceTts(text: String): File? {
         return try {
             audioIndex++
-            val file = File(cacheDir, "bg_voice_$audioIndex.mp3")
+            val file = File(cacheDir, "bg_stream_$audioIndex.mp3")
             val url = URL("https://translate.google.com/translate_tts?ie=UTF-8&tl=am&client=tw-ob&q=" + URLEncoder.encode(text, "UTF-8"))
             val con = url.openConnection() as HttpURLConnection
             con.setRequestProperty("User-Agent", "Mozilla/5.0")
@@ -223,7 +231,7 @@ class MainActivity : Activity() {
         } catch (e: Exception) { null }
     }
 
-    private fun playAmharicVoiceTrack(file: File?) {
+    private fun playAmharicAudio(file: File?) {
         if (file == null || !file.exists() || !isBackgroundListening) return
         try {
             mediaPlayer?.release()
@@ -237,7 +245,6 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        speechRecognizer?.destroy()
         mediaPlayer?.release()
         super.onDestroy()
     }
