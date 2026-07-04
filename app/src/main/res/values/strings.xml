@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Offline Amharic</string>
+    <string name="accessibility_desc">Offline Amharic Translator Engine Service</string>
 </resources>
