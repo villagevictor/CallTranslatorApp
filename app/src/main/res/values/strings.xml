@@ -1,4 +1,3 @@
 <resources>
-    <string name="app_name">Ethio Live Translate</string>
-    <string name="accessibility_desc">Ethio Live Translate accessibility service for analyzing media sound.</string>
+    <string name="app_name">Offline Amharic</string>
 </resources>
