@@ -32,12 +32,14 @@ class TranslationWebSocketClient {
                 client.webSocket(urlString = serverUrl) {
                     session = this
 
+                    // Outgoing 100ms PCM Chunk Streamer
                     val senderJob = launch {
                         for (audioChunk in outgoingAudioChannel) {
                             send(Frame.Binary(true, audioChunk))
                         }
                     }
 
+                    // Incoming Translation Receiver
                     val receiverJob = launch {
                         for (frame in incoming) {
                             when (frame) {
