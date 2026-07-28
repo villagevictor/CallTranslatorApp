@@ -21,10 +21,12 @@ class TranslationWebSocketClient {
     private val outgoingAudioChannel = Channel<ByteArray>(Channel.UNLIMITED)
 
     private val _incomingTranslatedAudio = MutableSharedFlow<ByteArray>()
-    val incomingTranslatedAudio = _incomingTranslatedAudio.asSharedFlow()
+    val incomingTranslatedAudio = _incomingSharedFlow()
 
     private val _incomingSubtitles = MutableSharedFlow<String>()
     val incomingSubtitles = _incomingSubtitles.asSharedFlow()
+
+    private fun _incomingSharedFlow() = _incomingTranslatedAudio.asSharedFlow()
 
     fun connectAndStream(serverUrl: String) {
         CoroutineScope(Dispatchers.IO).launch {
@@ -32,14 +34,12 @@ class TranslationWebSocketClient {
                 client.webSocket(urlString = serverUrl) {
                     session = this
 
-                    // Outgoing 100ms PCM Chunk Streamer
                     val senderJob = launch {
                         for (audioChunk in outgoingAudioChannel) {
                             send(Frame.Binary(true, audioChunk))
                         }
                     }
 
-                    // Incoming Translation Receiver
                     val receiverJob = launch {
                         for (frame in incoming) {
                             when (frame) {
