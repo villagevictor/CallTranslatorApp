@@ -3,58 +3,167 @@ package com.example.calltranslatorapp
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.TextView
+import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.example.calltranslatorapp.data.ContactFetcher
 import com.example.calltranslatorapp.service.AudioCallService
 
 class MainActivity : AppCompatActivity() {
 
-    private val PERMISSION_REQUEST_CODE = 101
+    private val PERMISSIONS_REQUEST_CODE = 102
+    private lateinit var contactsContainer: LinearLayout
+    private lateinit var statusTextView: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val layout = LinearLayout(this).apply {
+        // Main Dark Screen Layout (Matching Image Design)
+        val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(50, 50, 50, 50)
+            setBackgroundColor(Color.parseColor("#0F172A")) // Dark Background
+            setPadding(40, 60, 40, 40)
         }
 
-        val statusText = TextView(this).apply {
-            text = "Real-Time Call Translator"
-            textSize = 20f
-            setPadding(0, 0, 0, 40)
+        // App Header: "imo Translator Pro"
+        val headerTitle = TextView(this).apply {
+            text = "imo Translator Pro"
+            textSize = 24f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.parseColor("#10B981")) // Emerald Green
+            setPadding(0, 0, 0, 10)
         }
 
-        val startButton = Button(this).apply {
-            text = "Start Translation Service"
+        // Status Indicator
+        statusTextView = TextView(this).apply {
+            text = "● ዝግጁ ነው (Ready for HD Real-Time Call)"
+            textSize = 14f
+            setTextColor(Color.parseColor("#94A3B8"))
+            setPadding(0, 0, 0, 30)
+        }
+
+        // Section Title
+        val sectionTitle = TextView(this).apply {
+            text = "የቅርብ ጊዜ ጥሪዎች / Contacts List"
+            textSize = 16f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.WHITE)
+            setPadding(0, 10, 0, 20)
+        }
+
+        // Scrollable Contacts Container
+        val scrollView = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        }
+
+        contactsContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        scrollView.addView(contactsContainer)
+
+        // Bottom Action Button: "Start Live Translated Call"
+        val startCallButton = Button(this).apply {
+            text = "📞 HD ጥሪ ጀምር (Start Live Translated Call)"
+            setBackgroundColor(Color.parseColor("#059669")) // Accent Green
+            setTextColor(Color.WHITE)
+            textSize = 16f
+            setTypeface(null, Typeface.BOLD)
             setOnClickListener {
-                if (checkPermissions()) {
-                    startTranslationService()
-                    statusText.text = "Service Status: RUNNING"
-                } else {
-                    requestPermissions()
-                }
+                startTranslationService()
             }
         }
 
-        val stopButton = Button(this).apply {
-            text = "Stop Translation Service"
-            setOnClickListener {
-                stopTranslationService()
-                statusText.text = "Service Status: STOPPED"
-            }
+        mainLayout.addView(headerTitle)
+        mainLayout.addView(statusTextView)
+        mainLayout.addView(sectionTitle)
+        mainLayout.addView(scrollView)
+        mainLayout.addView(startCallButton)
+
+        setContentView(mainLayout)
+
+        // Request Permissions and Fetch Contacts
+        checkAndRequestPermissions()
+    }
+
+    private fun checkAndRequestPermissions() {
+        val permissionsToRequest = mutableListOf<String>()
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            permissionsToRequest.add(Manifest.permission.READ_CONTACTS)
         }
 
-        layout.addView(statusText)
-        layout.addView(startButton)
-        layout.addView(stopButton)
-        setContentView(layout)
+        if (permissionsToRequest.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, permissionsToRequest.toTypedArray(), PERMISSIONS_REQUEST_CODE)
+        } else {
+            loadDeviceContactsUI()
+        }
+    }
+
+    private fun loadDeviceContactsUI() {
+        val fetcher = ContactFetcher(this)
+        val contacts = fetcher.getDeviceContacts()
+
+        contactsContainer.removeAllViews()
+
+        if (contacts.isEmpty()) {
+            val emptyText = TextView(this).apply {
+                text = "ምንም የContacts ዝርዝር አልተገኘም"
+                setTextColor(Color.GRAY)
+                setPadding(0, 20, 0, 20)
+            }
+            contactsContainer.addView(emptyText)
+            return
+        }
+
+        // Render Top 10 Real Contacts from Phone
+        contacts.take(10).forEach { contact ->
+            val cardView = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setBackgroundColor(Color.parseColor("#1E293B"))
+                setPadding(30, 30, 30, 30)
+                val params = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                params.setMargins(0, 0, 0, 20)
+                layoutParams = params
+            }
+
+            val contactName = TextView(this).apply {
+                text = contact.name
+                textSize = 18f
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(Color.WHITE)
+            }
+
+            val contactPhone = TextView(this).apply {
+                text = "🇺🇸 እንግሊዝኛ ⇆ 🇪🇹 አማርኛ | " + contact.phoneNumber
+                textSize = 13f
+                setTextColor(Color.parseColor("#38BDF8"))
+            }
+
+            cardView.addView(contactName)
+            cardView.addView(contactPhone)
+
+            cardView.setOnClickListener {
+                statusTextView.text = "🔴 ጥሪ በዝግጅት ላይ ነው: " + contact.name
+                startTranslationService()
+            }
+
+            contactsContainer.addView(cardView)
+        }
     }
 
     private fun startTranslationService() {
@@ -64,26 +173,14 @@ class MainActivity : AppCompatActivity() {
         } else {
             startService(serviceIntent)
         }
+        statusTextView.text = "🔴 ጥሪ በሂደት ላይ ነው (Live Translation Active)"
+        statusTextView.setTextColor(Color.RED)
     }
 
-    private fun stopTranslationService() {
-        val serviceIntent = Intent(this, AudioCallService::class.java)
-        stopService(serviceIntent)
-    }
-
-    private fun checkPermissions(): Boolean {
-        val micPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-        return micPermission == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun requestPermissions() {
-        ActivityCompat.requestPermissions(
-            this,
-            arrayOf(
-                Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.FOREGROUND_SERVICE
-            ),
-            PERMISSION_REQUEST_CODE
-        )
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSIONS_REQUEST_CODE) {
+            loadDeviceContactsUI()
+        }
     }
 }
