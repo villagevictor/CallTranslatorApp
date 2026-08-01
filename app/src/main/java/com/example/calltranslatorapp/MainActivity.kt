@@ -7,7 +7,10 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
-import android.widget.*
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -23,23 +26,20 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Main Dark Screen Layout (Matching Image Design)
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#0F172A")) // Dark Background
+            setBackgroundColor(Color.parseColor("#0F172A"))
             setPadding(40, 60, 40, 40)
         }
 
-        // App Header: "imo Translator Pro"
         val headerTitle = TextView(this).apply {
             text = "imo Translator Pro"
             textSize = 24f
             setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.parseColor("#10B981")) // Emerald Green
+            setTextColor(Color.parseColor("#10B981"))
             setPadding(0, 0, 0, 10)
         }
 
-        // Status Indicator
         statusTextView = TextView(this).apply {
             text = "● ዝግጁ ነው (Ready for HD Real-Time Call)"
             textSize = 14f
@@ -47,7 +47,6 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 0, 0, 30)
         }
 
-        // Section Title
         val sectionTitle = TextView(this).apply {
             text = "የቅርብ ጊዜ ጥሪዎች / Contacts List"
             textSize = 16f
@@ -56,7 +55,6 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 10, 0, 20)
         }
 
-        // Scrollable Contacts Container
         val scrollView = ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -70,10 +68,9 @@ class MainActivity : AppCompatActivity() {
         }
         scrollView.addView(contactsContainer)
 
-        // Bottom Action Button: "Start Live Translated Call"
         val startCallButton = Button(this).apply {
             text = "📞 HD ጥሪ ጀምር (Start Live Translated Call)"
-            setBackgroundColor(Color.parseColor("#059669")) // Accent Green
+            setBackgroundColor(Color.parseColor("#059669"))
             setTextColor(Color.WHITE)
             textSize = 16f
             setTypeface(null, Typeface.BOLD)
@@ -90,7 +87,6 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(mainLayout)
 
-        // Request Permissions and Fetch Contacts
         checkAndRequestPermissions()
     }
 
@@ -127,7 +123,6 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Render Top 10 Real Contacts from Phone
         contacts.take(10).forEach { contact ->
             val cardView = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL

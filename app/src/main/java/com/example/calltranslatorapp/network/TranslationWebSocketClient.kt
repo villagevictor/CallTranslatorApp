@@ -1,61 +1,35 @@
 package com.example.calltranslatorapp.network
 
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.websocket.*
-import io.ktor.websocket.*
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.websocket.WebSockets
+import io.ktor.client.plugins.websocket.webSocketSession
+import io.ktor.websocket.DefaultClientWebSocketSession
+import io.ktor.websocket.Frame
+import io.ktor.websocket.readText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.launch
 
-class TranslationWebSocketClient {
+class TranslationWebSocketClient(private val serverUrl: String) {
 
     private val client = HttpClient(CIO) {
         install(WebSockets)
     }
 
     private var session: DefaultClientWebSocketSession? = null
-    private val outgoingAudioChannel = Channel<ByteArray>(Channel.UNLIMITED)
+    private val scope = CoroutineScope(Dispatchers.IO)
 
-    private val _incomingTranslatedAudio = MutableSharedFlow<ByteArray>()
-    val incomingTranslatedAudio = _incomingSharedFlow()
-
-    private val _incomingSubtitles = MutableSharedFlow<String>()
-    val incomingSubtitles = _incomingSubtitles.asSharedFlow()
-
-    private fun _incomingSharedFlow() = _incomingTranslatedAudio.asSharedFlow()
-
-    fun connectAndStream(serverUrl: String) {
-        CoroutineScope(Dispatchers.IO).launch {
+    fun connect(onTextReceived: (String) -> Unit) {
+        scope.launch {
             try {
-                client.webSocket(urlString = serverUrl) {
-                    session = this
-
-                    val senderJob = launch {
-                        for (audioChunk in outgoingAudioChannel) {
-                            send(Frame.Binary(true, audioChunk))
-                        }
+                session = client.webSocketSession(serverUrl)
+                session?.incoming?.consumeEach { frame ->
+                    if (frame is Frame.Text) {
+                        val text = frame.readText()
+                        onTextReceived(text)
                     }
-
-                    val receiverJob = launch {
-                        for (frame in incoming) {
-                            when (frame) {
-                                is Frame.Binary -> {
-                                    _incomingTranslatedAudio.emit(frame.readBytes())
-                                }
-                                is Frame.Text -> {
-                                    _incomingSubtitles.emit(frame.readText())
-                                }
-                                else -> {}
-                            }
-                        }
-                    }
-
-                    senderJob.join()
-                    receiverJob.join()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -63,12 +37,23 @@ class TranslationWebSocketClient {
         }
     }
 
-    fun sendAudioChunk(pcmChunk: ByteArray) {
-        outgoingAudioChannel.trySend(pcmChunk)
+    fun sendAudioChunk(audioBytes: ByteArray) {
+        scope.launch {
+            try {
+                session?.send(Frame.Binary(true, audioBytes))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     fun disconnect() {
-        session = null
-        client.close()
+        scope.launch {
+            try {
+                client.close()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 }
