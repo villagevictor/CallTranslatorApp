@@ -23,28 +23,25 @@ class CallTranslationService : Service() {
         super.onCreate()
         createNotificationChannel()
 
-        // Default WebSocket Server URL (Phase 4 Orchestration Engine)
         val serverUrl = "wss://echo.websocket.org" 
         webSocketClient = TranslationWebSocketClient(serverUrl)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("imo Translator Pro")
-            .setContentText("Real-Time Call Translation is Active...")
+            .setContentTitle("Real-Time Call Translator")
+            .setContentText("Live Translation Service Running...")
             .setSmallIcon(android.R.drawable.ic_menu_call)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
 
         startForeground(1, notification)
 
-        // Connect to Cloud AI Stream
         webSocketClient.connectAndStream()
 
-        // Listen for translated audio stream
         scope.launch {
             webSocketClient.incomingTranslatedAudio.collect { audioBytes ->
-                // Process audio frames in NetEQ playback loop
+                // Audio streaming playback buffer queue (Phase 4)
             }
         }
 
