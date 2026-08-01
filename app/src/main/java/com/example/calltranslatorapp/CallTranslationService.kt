@@ -30,7 +30,7 @@ class CallTranslationService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Real-Time Call Translator")
-            .setContentText("Live Translation Active...")
+            .setContentText("Live Translation Service Running...")
             .setSmallIcon(android.R.drawable.ic_menu_call)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
@@ -41,7 +41,7 @@ class CallTranslationService : Service() {
 
         scope.launch {
             webSocketClient.incomingTranslatedAudio.collect { audioBytes ->
-                // Audio streaming loop
+                // Audio buffer playback logic (Phase 4)
             }
         }
 
