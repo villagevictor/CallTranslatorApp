@@ -15,7 +15,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.calltranslatorapp.data.ContactFetcher
-import com.example.calltranslatorapp.service.AudioCallService
 
 class MainActivity : AppCompatActivity() {
 
@@ -162,7 +161,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startTranslationService() {
-        val serviceIntent = Intent(this, AudioCallService::class.java)
+        val serviceIntent = Intent(this, CallTranslationService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
         } else {

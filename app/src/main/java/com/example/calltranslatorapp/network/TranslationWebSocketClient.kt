@@ -6,9 +6,12 @@ import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.websocket.DefaultClientWebSocketSession
 import io.ktor.websocket.Frame
-import io.ktor.websocket.readText
+import io.ktor.websocket.readBytes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.launch
 
@@ -21,14 +24,16 @@ class TranslationWebSocketClient(private val serverUrl: String) {
     private var session: DefaultClientWebSocketSession? = null
     private val scope = CoroutineScope(Dispatchers.IO)
 
-    fun connect(onTextReceived: (String) -> Unit) {
+    private val _incomingTranslatedAudio = MutableSharedFlow<ByteArray>()
+    val incomingTranslatedAudio: SharedFlow<ByteArray> = _incomingTranslatedAudio.asSharedFlow()
+
+    fun connectAndStream() {
         scope.launch {
             try {
                 session = client.webSocketSession(serverUrl)
                 session?.incoming?.consumeEach { frame ->
-                    if (frame is Frame.Text) {
-                        val text = frame.readText()
-                        onTextReceived(text)
+                    if (frame is Frame.Binary) {
+                        _incomingTranslatedAudio.emit(frame.readBytes())
                     }
                 }
             } catch (e: Exception) {
