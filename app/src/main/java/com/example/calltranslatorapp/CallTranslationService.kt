@@ -9,41 +9,27 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.example.calltranslatorapp.network.TranslationWebSocketClient
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 class CallTranslationService : Service() {
 
     private val CHANNEL_ID = "CallTranslationChannel"
     private lateinit var webSocketClient: TranslationWebSocketClient
-    private val scope = CoroutineScope(Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-
-        val serverUrl = "wss://echo.websocket.org" 
-        webSocketClient = TranslationWebSocketClient(serverUrl)
+        webSocketClient = TranslationWebSocketClient("wss://echo.websocket.org")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Real-Time Call Translator")
-            .setContentText("Live Translation Service Running...")
+            .setContentText("Live Translation Active")
             .setSmallIcon(android.R.drawable.ic_menu_call)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
 
         startForeground(1, notification)
-
-        webSocketClient.connectAndStream()
-
-        scope.launch {
-            webSocketClient.incomingTranslatedAudio.collect { audioBytes ->
-                // Audio buffer playback logic (Phase 4)
-            }
-        }
+        webSocketClient.connect()
 
         return START_STICKY
     }
@@ -59,7 +45,7 @@ class CallTranslationService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Call Translation Service Channel",
+                "Call Translation Service",
                 NotificationManager.IMPORTANCE_LOW
             )
             val manager = getSystemService(NotificationManager::class.java)
