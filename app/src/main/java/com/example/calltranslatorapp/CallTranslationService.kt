@@ -24,7 +24,7 @@ class CallTranslationService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Real-Time Call Translator")
-            .setContentText("Live Translation Active")
+            .setContentText("Live Translation Service Running")
             .setSmallIcon(android.R.drawable.ic_menu_call)
             .build()
 
@@ -45,7 +45,7 @@ class CallTranslationService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Call Translation Service",
+                "Call Translation Service Channel",
                 NotificationManager.IMPORTANCE_LOW
             )
             val manager = getSystemService(NotificationManager::class.java)

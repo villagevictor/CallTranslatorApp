@@ -1,64 +1,36 @@
 package com.example.calltranslatorapp.network
 
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.websocket.WebSockets
-import io.ktor.client.plugins.websocket.webSocketSession
-import io.ktor.websocket.DefaultClientWebSocketSession
-import io.ktor.websocket.Frame
-import io.ktor.websocket.readBytes
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.consumeEach
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.launch
+import okhttp3.*
+import okio.ByteString
+import okio.ByteString.Companion.toByteString
 
 class TranslationWebSocketClient(private val serverUrl: String) {
 
-    private val client = HttpClient(CIO) {
-        install(WebSockets)
-    }
-
-    private var session: DefaultClientWebSocketSession? = null
-    private val scope = CoroutineScope(Dispatchers.IO)
-
-    private val _incomingAudio = MutableSharedFlow<ByteArray>()
-    val incomingAudio: SharedFlow<ByteArray> = _incomingAudio.asSharedFlow()
+    private val client = OkHttpClient()
+    private var webSocket: WebSocket? = null
 
     fun connect() {
-        scope.launch {
-            try {
-                session = client.webSocketSession(serverUrl)
-                session?.incoming?.consumeEach { frame ->
-                    if (frame is Frame.Binary) {
-                        _incomingAudio.emit(frame.readBytes())
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
+        val request = Request.Builder().url(serverUrl).build()
+        webSocket = client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                // Connection opened
             }
-        }
+
+            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                // Incoming audio bytes from AI streaming server (Phase 4)
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                t.printStackTrace()
+            }
+        })
     }
 
     fun sendAudio(audioBytes: ByteArray) {
-        scope.launch {
-            try {
-                session?.send(Frame.Binary(true, audioBytes))
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        webSocket?.send(audioBytes.toByteString())
     }
 
     fun disconnect() {
-        scope.launch {
-            try {
-                client.close()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        webSocket?.close(1000, "Disconnecting")
     }
 }
