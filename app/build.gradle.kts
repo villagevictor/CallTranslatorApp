@@ -30,7 +30,7 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
 
-    // Ktor Streaming WebSockets (Phase 4 AI Architecture)
+    // Phase 4: Ktor Streaming WebSockets Infrastructure
     implementation("io.ktor:ktor-client-core:2.3.7")
     implementation("io.ktor:ktor-client-cio:2.3.7")
     implementation("io.ktor:ktor-client-websockets:2.3.7")
